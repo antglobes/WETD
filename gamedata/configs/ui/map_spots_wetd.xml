@@ -1,0 +1,73 @@
+<!--
+Author: Antglobes
+Last Modified: 27/01/25
+Purpose: New Map Spot Defintion
+-->
+
+<!-- 
+    Unknown spots i.e havent met (had dialog or traded) or havent got faction upgrade
+    Unknown Stalker Neutral
+    Unknown Stalker Enemy
+    Unknown Stalker Friend
+    Unknown Stalker Story
+
+    dont have article for this mutant
+    Unknown Mutant Neutral
+    Unknown Mutant Aggressive
+
+
+-->
+
+<unknown_stalker_neutral>
+    <level_map spot="unknown_stalker_neutral_spot"/>
+    <mini_map spot="unknown_stalker_neutral_spot"/>
+</unknown_stalker_neutral>
+
+<unknown_stalker_neutral_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_stalker_neutral_spot</texture>
+</unknown_stalker_neutral_spot>
+
+<unknown_stalker_enemy>
+    <level_map spot="unknown_stalker_enemy_spot"/>
+    <mini_map spot="unknown_stalker_enemy_spot"/>
+</unknown_stalker_enemy>
+
+<unknown_stalker_enemy_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_stalker_enemy_spot</texture>
+</unknown_stalker_enemy_spot>
+
+<unknown_stalker_friend>
+    <level_map spot="unknown_stalker_friend_spot"/>
+    <mini_map spot="unknown_stalker_friend_spot"/>
+</unknown_stalker_friend>
+
+<unknown_stalker_friend_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_stalker_friend_spot</texture>
+</unknown_stalker_friend_spot>
+
+<unknown_stalker_story>
+    <level_map spot="unknown_stalker_story_spot"/>
+    <mini_map spot="unknown_stalker_story_spot"/>
+</unknown_stalker_story>
+
+<unknown_stalker_story_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_stalker_story_spot</texture>
+</unknown_stalker_story_spot>
+
+<unknown_mutant_passive>
+    <level_map spot="unknown_mutant_passive_spot"/>
+    <mini_map spot="unknown_mutant_passive_spot"/>
+</unknown_mutant_passive>
+
+<unknown_mutant_passive_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_mutant_passive_spot</texture>
+</unknown_mutant_passive_spot>
+
+<unknown_mutant_aggressive>
+    <level_map spot="unknown_mutant_aggressive_spot"/>
+    <mini_map spot="unknown_mutant_aggressive_spot"/>
+</unknown_mutant_aggressive>
+
+<unknown_mutant_aggressive_spot width="12" height="12" alignment="c" stretch="1" scale="1" scale_min="1" scale="1.5">
+    <texture>ui_icons_wetd_unknown_mutant_aggressive_spot</texture>
+</unknown_mutant_aggressive_spot>
