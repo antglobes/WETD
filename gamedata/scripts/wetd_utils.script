@@ -1,0 +1,274 @@
+--[[
+Author: Antglobes
+Last Modified: 27/01/25
+Purpose: Utility Script
+]]
+
+
+-- Tables
+
+faction_to_colour = {
+    ["stalker"]     = {241, 196, 15},
+    ["csky"]        = {0, 191, 255},
+    ["bandit"]      = {194, 125, 14},
+    ["army"]        = {118, 139, 5},
+    ["killer"]      = {61, 104, 145},
+    ["monolith"]    = {33, 148, 150},
+    ["ecolog"]      = {122, 199, 184},
+    ["dolg"]        = {178, 34, 34},
+    ["freedom"]     = {34, 139, 34},
+    ["greh"]        = {14, 1, 1},
+    ["renegade"]    = {168, 67, 0},
+    ["isg"]         = {184, 102, 135},
+    ["monster"]     = {74, 46, 16},
+    ["default"]     = {250, 250, 250},
+}
+
+faction_to_name = {
+    ["stalker"]     = "Stalker",
+    ["csky"]        = "Clear Sky",
+    ["bandit"]      = "Bandit",
+    ["army"]        = "Army",
+    ["killer"]      = "Mercenary",
+    ["monolith"]    = "Monolith",
+    ["ecolog"]      = "Ecologist",
+    ["dolg"]        = "Duty",
+    ["freedom"]     = "Freedom",
+    ["greh"]        = "Sin",
+    ["renegade"]    = "Renegade",
+    ["isg"]         = "ISG",
+    ["monster"]     = "Mutant",
+}
+
+special_character_faction = {
+    -- Cordon
+    ["Loris"] = "stalker",
+    ["Sidorovich"] = "stalker",
+    -- Garbage
+    ["Butcher"] = "stalker",
+    -- Rostok
+    ["Barkeep"] = "stalker",
+    ["Snitch"] = "stalker",
+    ["Arnie"] = "stalker",
+    -- Red Forest
+    ["Forester"] = "stalker",
+    -- Jupiter
+    ["Hawaiian"] = "stalker",
+    ["Ashot"] = "freedom",
+    -- Zaton
+    ["Nimble"] = "stalker",
+    ["Beard"] = "stalker",
+    ["Owl"] = "stalker",
+    -- Great Swamps
+    ["Professor Kalancha"] = "csky",
+    -- Misc
+    ['Senior Sergeant Grebenko'] = "dolg",
+}
+
+-- Mutant Sections to readable
+mutant_patterns = {
+    "bloodsucker", "mutant_boar", "burer", "cat", "chimera", "pseudodog_grey", "flesh_strong",
+	"kontroler", "dog", "dog_red", "dog_white", "flesh", "fracture", "gigant", "krovosos",
+	"poltergiest", "pseudodog", "psy_dog", "psy_dog_phantom", "mutant_boar_strong", "krovosos_strong",
+	"rat", "snork", "tushkano", "zombie", "lurker", "karlik", "kontroler", "kontroler_3", "kontroler_4",
+	"kontroler_5", "psevdogigant", "bibliotekar", "boar", "controller", "psysucker"
+}
+
+function get_mutant_section()
+	local mutant_sections = {}
+	ini_sys:section_for_each( function(section)
+		local visual = ini_sys:r_string_ex(section, "visual")
+		if visual and string.find(visual, "monsters\\") then
+			mutant_sections[#mutant_sections + 1] = section
+		end
+	end)
+	return mutant_sections
+end
+
+function sort_mutant_sect_to_generic()
+	printf("Sorting Mutant Sections")
+	generic_mutant_sect = {}
+	local mutant_sections = get_mutant_section()
+	for _, mutant_name in pairs(mutant_patterns) do
+		for _, sect in pairs(mutant_sections) do
+			if string.find(sect, mutant_name) then
+				generic_mutant_sect[sect] = mutant_name
+			end
+		end
+	end
+end
+
+function get_mutant_name(sect)
+	if not sect then return end
+	return generic_mutant_sect[sect]
+end
+
+-- Colours & UI
+
+--- Returns XML valid colour string 
+---@param any
+function get_colour_string(name)
+    return strformat("%c[%s]", name)
+end
+
+---@param condition number
+function get_condition_colour(condition)
+    condition = round(condition * 100)
+    if condition <= 25 then
+        return get_colour_string("d_green")
+    elseif condition <= 50  then
+        return get_colour_string("pda_yellow")
+    elseif condition <= 75 then
+        return get_colour_string("d_orange")
+    else
+        return get_colour_string("d_red")
+    end
+end
+
+
+-- Maths
+
+function dist_to_pos(npc, pos)
+	return npc:position():distance_to(pos or db.actor:position())
+end
+
+-- Smart Terrains
+
+function get_smart_name(smart)
+    return game.translate_string("st_" .. smart:name() .. "_name")
+end
+
+function get_closest_smart(pos)
+    local closest_smart_id = false
+    local closest_dist
+    for name, smart in pairs(SIMBOARD.smarts_by_names) do
+        if simulation_objects.is_on_the_same_level(alife():actor(), smart) then
+            local dist = smart.position:distance_to(pos or db.actor:position())
+            local tbl = SIMBOARD.smarts[smart.id]
+            if tbl and (not closest_smart_id or (dist < closest_dist)) then
+                closest_smart_id = tbl.smrt.id
+                closest_dist = dist
+            end
+        end
+    end
+
+    return SIMBOARD.smarts[closest_smart_id].smrt
+end
+
+-- String Mainpulation
+
+function capitalise(str)
+    return (str:gsub("^%l", string.upper))
+end
+
+
+---@Author NLTP ASHES
+function get_translation(str, ...)
+    if not has_translation(str) then return end
+
+    local string = game.translate_string(str)
+
+    if (select('#',...) >= 1) then
+        local i = 0
+        local p = {...}
+        local function sr()
+            i = i + 1
+            if (type(p[i]) == "userdata") then
+                return "userdata"
+            end
+            return tostring(p[i])
+        end
+        string = string.gsub(string,"%%s",sr)
+    end
+
+    return string
+end
+
+function has_translation(str)
+    return game.translate_string(str) ~= str
+end
+
+-- Table Mainpulation
+
+--- Check if table contains a key
+---@param tbl table
+---@param key any
+---@param by_key boolean
+---@param return_value boolean
+function contains(tbl, key, by_key, return_value, return_idx)
+	if is_empty(tbl) or key == "" then return false end
+    for k, v in pairs(tbl) do
+        if by_key and k == key then
+			if return_idx then
+				return true, k
+			elseif return_value then
+				return true, v
+			else
+				return true
+			end
+        else
+            if v == key then
+                if return_value and return_idx then
+                    return true, v, k
+				elseif return_value then
+					return true, v
+				elseif return_idx then
+					return true, k
+                else
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Game Objects
+
+--- Authored by NLTP_ASHES 17/02/24 Anomaly Discord
+function get_unknown_object(obj, result_obj_type)
+    if result_obj_type == "server" then
+        if obj and type(obj.id) == "number" then
+            return obj
+        elseif obj and type(obj.id) == "function" then
+            return alife_object(obj:id())
+        end
+    elseif result_obj_type == "game" then
+        if obj and type(obj.id) == "number" then
+            return level.object_by_id(obj.id)
+        elseif obj and type(obj.id) == "function" then
+            return obj
+        end
+    end
+    return nil
+end
+
+-- Debugging
+
+function dbg_pr(header, str, ...)
+    if DEV_DEBUG then
+        printf(header, strformat(str, ...))
+    end
+end
+
+function pr(str, ...)
+    dbg_pr("WETD | Utils: %s", str, ...)
+end
+
+function get_scripts_installed(expected_scripts)
+    local installed = {}
+    for k, v in pairs(_G) do
+        if type(_G[k]) == "table" and contains(expected_scripts, k) then
+            installed[k] = true
+            pr("Found script: %s", k)
+        end
+    end
+    return installed
+end
+
+
+-- Callbacks
+
+function on_game_start()
+    RegisterScriptCallback("actor_on_first_update", sort_mutant_sect_to_generic)
+end

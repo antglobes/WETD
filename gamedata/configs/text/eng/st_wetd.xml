@@ -1,0 +1,9 @@
+
+<string_table>
+    <string id="ui_st_pda_tracking">
+        <text>Tracking Target</text>
+    </string>
+    <string id="ui_st_pda_last_known">
+        <text>Last Known Location: %s</text>
+    </string>
+</string_table>
