@@ -243,6 +243,21 @@ function get_unknown_object(obj, result_obj_type)
     return nil
 end
 
+-- Relations + Goodwill
+
+function is_enemy(npc)
+    return game_relations.is_factions_enemies(npc:character_community(), db.actor:character_community())
+end
+
+function is_friend(npc)
+    return game_relations.is_factions_friends(npc:character_community(), db.actor:character_community())
+end
+
+function is_story_npc(npc)
+    return get_object_story_id(npc:id()) and true or false
+end
+
+
 -- Debugging
 
 function dbg_pr(header, str, ...)

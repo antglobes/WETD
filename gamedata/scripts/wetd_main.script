@@ -31,10 +31,12 @@ IGI_DART_GUN = "wpn_igi_ks23_ecolog"
 IGI_DART_AMMO = "ammo_23_igi_eco"
 EXPECTED_SCRIPTS = {"igi_utils"}
 MAP_SPOT_TIMEOUT = 30000 --- 5 MINTUES
+MAP_SPOT_ICON_PREFIX = "unknown_"
 
 
 -- Globals (script)
 local tracking_npc = {}
+local aggro_npcs = {}
 
 -- Debug
 
@@ -43,6 +45,11 @@ function pr(str, ...)
 end
 
 -- Helpers
+
+function is_monster(npc)
+    return (npc:character_community() == "zombied" or IsMonster(npc)) and true or false
+end
+
 
 function get_connection_stren(stren)
     if stren <= 25 then
@@ -58,7 +65,7 @@ function get_connection_stren(stren)
 end
 
 function get_tracking_info(npc)
-    local is_monster = IsMonster(npc)
+    local is_monster = is_monster(npc)
     local name = is_monster and capitalise(get_mutant_name(npc:section())) or npc:character_name()
     local faction = is_monster and "monster" or npc:character_community()
     local dist = distance_between(npc, db.actor)
@@ -80,8 +87,33 @@ function get_tracking_info(npc)
     return  {hint=hint, last_known_hint=last_known_hint, dist=dist} 
 end
 
-function get_map_spot_icon(npc)
-    return IsMonster(npc) and "warfare_mutant_spot" or "circle_" .. npc:character_community() 
+function get_npc_state(npc)
+    local state = ""
+    if is_monster(npc) then
+        state = is_aggro_npc(npc:id()) and "aggressive" or "passive"
+    elseif IsStalker(npc) then
+        if is_aggro_npc(npc:id()) or game_relations.is_faction_enemies(npc:character_community(), db.actor:character_community()) then
+            state = "enemy"
+        elseif is_story_npc(npc) then 
+            state = "story"
+        elseif is_friend(npc) then
+            state = "friend"
+        else
+            state = "neutral"
+        end
+    end
+    return state
+end
+
+function get_map_spot_icon(npc) --TODO Alter based on upgrades 
+    local spot_icon = MAP_SPOT_ICON_PREFIX
+    local state = get_npc_state(npc)
+    if is_monster(npc) then
+        spot_icon = spot_icon .. "mutant_" .. state 
+    else
+        spot_icon = spot_icon .. "stalker_" .. state
+    end
+    return spot_icon
 end
 
 -- Tracking Map Spots
@@ -189,7 +221,7 @@ function init_last_known_spot(npc, entry, tracking_info)
 end
 
 function forget_tracking_spot(victim, killer)
-    local is_monster = IsMonster(victim)
+    local is_monster = is_monster(victim)
     if not IsStalker(victim) and not is_monster then pr("npc not stalker or monster") return end
     --if not contains(tracking_npc, victim:id(), true) then pr("not tracking: %s", victim:id()) return end
     local spot_icon = get_map_spot_icon(victim)
@@ -233,7 +265,7 @@ end
 function start_tracking(npc, amount, dir, who, bone_index)
     
     if who:id() ~= AC_ID then pr("not hit by player") return end
-    local is_monster = IsMonster(npc)
+    local is_monster = is_monster(npc)
     if not IsStalker(npc) and not is_monster then pr("npc not stalker or monster") return end
     if contains(tracking_npc, who:id(), true) then return end
     if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
@@ -393,6 +425,28 @@ function on_npc_loot_corpse(npc, corpse, item, lootable)
     alife_create(IGI_DART_AMMO, npc)
 end
 
+function is_aggro_npc(npc_id)
+    return contains(aggro_npcs, npc_id, true) and aggro_npcs[npc_id] or false
+end
+
+function update_aggro_npcs(npc, enemy, flags)
+    if not contains(aggro_npcs, npc:id(), true) and enemy:id() == AC_ID then
+        aggro_npcs[npc:id()] = true
+        
+    elseif contains(aggro_npcs, npc:id(), true) and enemy:id() ~= AC_ID and npc:best_enemy():id() ~= AC_ID then
+        aggro_npcs[npc:id()] = nil
+    end
+end
+
+--[[
+ (IsStalker(npc) and game_relations.is_faction_enemies(npc:character_community(), db.actor:character_community()))
+    elseif contains(aggro_npcs, npc:id(), true) and enemy:id() == AC_ID then
+        if not xr_combat_ignore.is_enemy(npc, enemy) then
+            aggro_npcs[npc:id()] = nil
+        end
+    end
+]]
+
 
 function on_game_start()
     RegisterScriptCallback("npc_on_hit_callback", start_tracking)
@@ -403,4 +457,5 @@ function on_game_start()
     RegisterScriptCallback("GUI_on_show", end_tracking_on_loot)
     RegisterScriptCallback("on_before_level_changing", on_transition)
     RegisterScriptCallback("monster_on_loot_init", on_monster_loot)
+    RegisterScriptCallback("on_enemy_eval", update_aggro_npcs)
 end
