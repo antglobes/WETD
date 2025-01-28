@@ -35,7 +35,7 @@ LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
 IGI_DART_GUN = "wpn_igi_ks23_ecolog"
 IGI_DART_AMMO = "ammo_23_igi_eco"
 EXPECTED_SCRIPTS = {"igi_utils"}
-MAP_SPOT_TIMEOUT = 30000 --- 5 MINTUES
+MAP_SPOT_TIMEOUT = 300000 --- 5 MINTUES
 MAP_SPOT_ICON_PREFIX = "unknown_"
 
 
@@ -94,7 +94,8 @@ function get_tracking_info(npc)
     local smart_name = gts(get_closest_smart(npc:position()):name())
     local last_known_hint = hint .. gray_1_clr .. "Last Known Location:\\n" .. red_clr .. get_smart_name(get_closest_smart(npc)) .. "\\n"
 
-    hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", npc.health) .. "\\n"
+    local npc_health = npc.health > 0 and npc.health or 0
+    hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", round(npc_health * 100)) .. "%\\n"
     hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
     hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
     
@@ -365,7 +366,7 @@ function update_tracking()
 
             if contains(entry, "timeout", true) and entry["timeout"] <= tg then
                 pr("last known spot timeout")
-                remove_all_mapspots(id, spot_icon, entry)
+                remove_all_spots(id, spot_icon, entry)
                 stop_tracking(id)
                 return
             end

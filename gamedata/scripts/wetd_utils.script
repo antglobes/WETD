@@ -119,16 +119,28 @@ function get_colour_string(name)
 end
 
 ---@param condition number
-function get_condition_colour(condition)
+function get_condition_colour(condition, reversed)
     condition = round(condition * 100)
-    if condition <= 25 then
-        return get_colour_string("d_green")
-    elseif condition <= 50  then
-        return get_colour_string("pda_yellow")
-    elseif condition <= 75 then
-        return get_colour_string("d_orange")
+    if not reversed then 
+        if condition <= 25 then
+            return get_colour_string("d_red")
+        elseif condition <= 50  then
+            return get_colour_string("d_orange")
+        elseif condition <= 75 then
+            return get_colour_string("pda_yellow")
+        else
+            return get_colour_string("d_green")
+        end
     else
-        return get_colour_string("d_red")
+        if condition <= 25 then
+            return get_colour_string("d_green")
+        elseif condition <= 50  then
+            return get_colour_string("pda_yellow")
+        elseif condition <= 75 then
+            return get_colour_string("d_orange")
+        else
+            return get_colour_string("d_red")
+        end
     end
 end
 
@@ -253,28 +265,21 @@ end
 -- Sourced from trader_autoinject 28/01/25
 -- used to get the real community of the NPC by checking spawn id
 -- author: HarukaSai
-function get_real_community(npc, default)
+function get_real_community(npc)
     local furniture = {
         ["esc_m_trader"] = true,
         ["red_m_lesnik"] = true
-    }
-    local blacklisted_comms = {
-        ["trader"] = true,
-        ["monster"] = true
     }
     
 	if furniture[npc:name()] then
 		return "stalker"
 	end
 	local community = character_community(npc)
-	if not blacklisted_comms[community] then
-		return community
-	end
-	local squad_community = get_object_squad(npc):get_squad_community()
-	if not blacklisted_comms[squad_community] then
+	if not community then
+	    local squad_community = get_object_squad(npc):get_squad_community()
 		return squad_community
 	else
-		return default
+		return community
 	end
 end
 
