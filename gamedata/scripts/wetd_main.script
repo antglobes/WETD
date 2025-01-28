@@ -24,6 +24,7 @@ attitude_to_clr = wetd_utils.attitude_to_clr
 is_enemy = wetd_utils.is_enemy
 is_friend = wetd_utils.is_friend
 is_story_npc = wetd_utils.is_story_npc
+get_real_community = wetd_utils.get_real_community
 
 -- Constants
 
@@ -56,8 +57,7 @@ end
 -- Helpers
 
 function is_mutant(npc)
-    if IsStalker(npc) then return false end
-    if (IsMonster(npc) or npc:character_community() == "zombied") then return true end
+    return get_real_community(npc) == "monster" or false
 end
 
 
@@ -78,7 +78,7 @@ end
 function get_tracking_info(npc)
     local is_monster = is_mutant(npc)
     local name = is_monster and capitalise(get_mutant_name(npc:section())) or npc:character_name()
-    local faction = is_monster and "monster" or npc:character_community()
+    local faction = get_real_community(npc)
     local dist = distance_between(npc, db.actor)
     local hint = ""
     
