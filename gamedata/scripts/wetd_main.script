@@ -63,11 +63,13 @@ end
 
 function get_connection_stren(stren)
     stren = round(stren * 100)
-    if stren <= 20 then
+    if stren <= 25 then
         return "Strong"
     elseif stren <= 45 then
         return "Average"
-    elseif stren <= 70 then
+    elseif stren <= 65 then
+        return "Ok"
+    elseif stren <= 85 then
         return "Weak"
     else
         return "Searching ..."
@@ -92,8 +94,9 @@ function get_tracking_info(npc)
     local smart_name = gts(get_closest_smart(npc:position()):name())
     local last_known_hint = hint .. gray_1_clr .. "Last Known Location:\\n" .. red_clr .. get_smart_name(get_closest_smart(npc)) .. "\\n"
 
-    hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. round_idp(dist, 2) .. "m \\n"
-    hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
+    hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", npc.health) .. "\\n"
+    hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
+    hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
     
     local attitude = get_npc_attitude(npc)
     hint = hint .. gray_1_clr .. "Attitude: " .. get_attitude_clr(attitude) .. capitalise(attitude) .. "\n"
@@ -200,7 +203,7 @@ function init_tracking_spot(npc)
     local id = npc:id()
     local spot_icon = get_map_spot_icon(npc)
     add_map_spot(id, spot_icon, TRACKING_SPOT_TEXT)
-    tracking_npc[id] = {lost_contact=false, timeout=MAP_SPOT_TIMEOUT}
+    tracking_npc[id] = {lost_contact=false, timeout=time_global() + MAP_SPOT_TIMEOUT}
 end
 
 function init_last_known_spot(npc, entry, tracking_info)
@@ -353,20 +356,22 @@ end
 function update_tracking()
     for id, entry in pairs(tracking_npc) do
         local tg = time_global()
-        if contains(entry, "timeout", true) and entry["timeout"] >= tg then
-            pr("last known spot timeout")
-            stop_tracking(id)
-            return
-        end
-
         local npc = get_unknown_object({id=id}, "game")
-        if npc then -- npc alive
+
+        if npc then
             local spot_icon = get_map_spot_icon(npc)
             local tracking_info = get_tracking_info(npc)
             local dist_to_target = tracking_info["dist"]
 
+            if contains(entry, "timeout", true) and entry["timeout"] <= tg then
+                pr("last known spot timeout")
+                remove_all_mapspots(id, spot_icon, entry)
+                stop_tracking(id)
+                return
+            end
+
             -- as long as target is on the same level track them
-            if simulation_objects.is_on_the_actor_level(alife():object(id)) then
+            if not GetEvent("underground")  then -- simulation_objects.is_on_the_actor_level(alife():object(id))
                 -- Stop showing active map spot as out of range but don't stop tracking them
                 if dist_to_target > MAX_TRACKING_DIST then
                     --pr("Out of detectable range by %sm, removing mapspot", dist_to_target - MAX_TRACKING_DIST)
