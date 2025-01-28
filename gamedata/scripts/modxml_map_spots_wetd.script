@@ -1,11 +1,11 @@
 --[[
 Author: Antglobes
-Last Modified: 27/01/25
+Last Modified: 28/01/25
 Purpose: Add New Map Spots
 ]]
 
 --- Author: Catspaw 
---- Sourced: 27/01/25
+--- Sourced: 28/01/25
 function on_xml_read()
     RegisterScriptCallback("on_xml_read", 
         function(xml_file_name, xml_obj)

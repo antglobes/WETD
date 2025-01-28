@@ -1,11 +1,18 @@
 --[[
 Author: Antglobes
-Last Modified: 27/01/25
+Last Modified: 28/01/25
 Purpose: Utility Script
 ]]
 
 
 -- Tables
+
+attitude_to_clr = {
+    ["enemy"]   = {184, 40, 43},
+    ["story"]   = {206, 104, 32},
+    ["friend"]  = {78, 183, 49},
+    ["neutral"] = {127, 127, 150},
+}
 
 faction_to_colour = {
     ["stalker"]     = {241, 196, 15},

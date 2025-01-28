@@ -1,6 +1,6 @@
 --[[
 Author: Antglobes
-Last Modified: 27/01/25
+Last Modified: 28/01/25
 Purpose: Main Tracking & Map Spot Functionality
 ]]
 
@@ -20,6 +20,10 @@ get_smart_name = wetd_utils.get_smart_name
 get_unknown_object = wetd_utils.get_unknown_object
 dist_to_pos = wetd_utils.dist_to_pos
 get_scripts_installed = wetd_utils.get_scripts_installed
+attitude_to_clr = wetd_utils.attitude_to_clr
+is_enemy = wetd_utils.is_enemy
+is_friend = wetd_utils.is_friend
+is_story_npc = wetd_utils.is_story_npc
 
 -- Constants
 
@@ -37,6 +41,11 @@ MAP_SPOT_ICON_PREFIX = "unknown_"
 -- Globals (script)
 local tracking_npc = {}
 local aggro_npcs = {}
+local yellow_clr = utils_xml.get_color("yellow")
+local gray_1_clr = utils_xml.get_color("ui_gray_1")
+local pda_white_clr = utils_xml.get_color("pda_white")
+local red_clr = utils_xml.get_color("d_red")
+
 
 -- Debug
 
@@ -46,17 +55,19 @@ end
 
 -- Helpers
 
-function is_monster(npc)
-    return (npc:character_community() == "zombied" or IsMonster(npc)) and true or false
+function is_mutant(npc)
+    if IsStalker(npc) then return false end
+    if (IsMonster(npc) or npc:character_community() == "zombied") then return true end
 end
 
 
 function get_connection_stren(stren)
-    if stren <= 25 then
+    stren = round(stren * 100)
+    if stren <= 20 then
         return "Strong"
-    elseif stren <= 50 then
+    elseif stren <= 45 then
         return "Average"
-    elseif stren <= 75 then
+    elseif stren <= 70 then
         return "Weak"
     else
         return "Searching ..."
@@ -65,53 +76,64 @@ function get_connection_stren(stren)
 end
 
 function get_tracking_info(npc)
-    local is_monster = is_monster(npc)
+    local is_monster = is_mutant(npc)
     local name = is_monster and capitalise(get_mutant_name(npc:section())) or npc:character_name()
     local faction = is_monster and "monster" or npc:character_community()
     local dist = distance_between(npc, db.actor)
     local hint = ""
     
-    hint = hint .. utils_xml.get_color("yellow") ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
-    hint = hint .. utils_xml.get_color("ui_gray_1") .. "Name: " .. utils_xml.get_color("pda_white") .. name .. "\\n"
+    hint = hint .. yellow_clr ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
+    hint = hint .. gray_1_clr .. "Name: " .. pda_white_clr .. name .. "\\n"
     if not contains(faction_to_name, faction, true) then
         faction = special_character_faction[name]
     end
-    hint = hint .. utils_xml.get_color("ui_gray_1") .. "Faction: " .. strformat("%c[255, %s, %s, %s]", unpack(faction_to_colour[faction])) .. faction_to_name[faction] .. "\\n"
+    hint = hint .. gray_1_clr .. "Faction: " .. strformat("%c[255, %s, %s, %s]", unpack(faction_to_colour[faction])) .. faction_to_name[faction] .. "\\n"
 
     local smart_name = gts(get_closest_smart(npc:position()):name())
-    local last_known_hint = hint .. utils_xml.get_color("ui_gray_1") .. "Last Known Location:\\n" .. utils_xml.get_color("d_red") .. get_smart_name(get_closest_smart(npc)) .. "\\n"
+    local last_known_hint = hint .. gray_1_clr .. "Last Known Location:\\n" .. red_clr .. get_smart_name(get_closest_smart(npc)) .. "\\n"
 
-    hint = hint .. utils_xml.get_color("ui_gray_1") .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. round_idp(dist, 2) .. "m \\n"
-    hint = hint .. utils_xml.get_color("ui_gray_1") .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. get_connection_stren(round_idp(dist / MAX_TRACKING_DIST, 2)) .. "\\n"
+    hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. round_idp(dist, 2) .. "m \\n"
+    hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
+    
+    local attitude = get_npc_attitude(npc)
+    hint = hint .. gray_1_clr .. "Attitude: " .. get_attitude_clr(attitude) .. capitalise(attitude) .. "\n"
 
     return  {hint=hint, last_known_hint=last_known_hint, dist=dist} 
 end
 
-function get_npc_state(npc)
-    local state = ""
-    if is_monster(npc) then
-        state = is_aggro_npc(npc:id()) and "aggressive" or "passive"
+function get_attitude_clr(attitude)
+    if not attitude or attitude and attitude == "passive" then attitude = "neutral" end
+    if attitude == "aggressive" then
+        attitude = "enemy"
+    end
+    return strformat("%c[255, %s, %s, %s]", unpack(attitude_to_clr[attitude]))
+end
+
+function get_npc_attitude(npc)
+    local attitude = ""
+    if is_mutant(npc) then
+        attitude = is_aggro_npc(npc:id()) and "aggressive" or "passive"
     elseif IsStalker(npc) then
-        if is_aggro_npc(npc:id()) or game_relations.is_faction_enemies(npc:character_community(), db.actor:character_community()) then
-            state = "enemy"
-        elseif is_story_npc(npc) then 
-            state = "story"
+        if is_story_npc(npc) then 
+            attitude = "story"
+        elseif is_aggro_npc(npc:id()) or is_enemy(npc) then
+            attitude = "enemy"        
         elseif is_friend(npc) then
-            state = "friend"
+            attitude = "friend"
         else
-            state = "neutral"
+            attitude = "neutral"
         end
     end
-    return state
+    return attitude
 end
 
 function get_map_spot_icon(npc) --TODO Alter based on upgrades 
     local spot_icon = MAP_SPOT_ICON_PREFIX
-    local state = get_npc_state(npc)
-    if is_monster(npc) then
-        spot_icon = spot_icon .. "mutant_" .. state 
+    local attitude = get_npc_attitude(npc)
+    if is_mutant(npc) then
+        spot_icon = spot_icon .. "mutant_" .. attitude 
     else
-        spot_icon = spot_icon .. "stalker_" .. state
+        spot_icon = spot_icon .. "stalker_" .. attitude
     end
     return spot_icon
 end
@@ -220,11 +242,11 @@ function init_last_known_spot(npc, entry, tracking_info)
    -- end)
 end
 
-function forget_tracking_spot(victim, killer)
-    local is_monster = is_monster(victim)
+function forget_tracking_spot(victim, killer, icon)
+    local is_monster = is_mutant(victim)
     if not IsStalker(victim) and not is_monster then pr("npc not stalker or monster") return end
     --if not contains(tracking_npc, victim:id(), true) then pr("not tracking: %s", victim:id()) return end
-    local spot_icon = get_map_spot_icon(victim)
+    local spot_icon = icon and icon or get_map_spot_icon(victim)
     if has_map_spot(victim:id(), spot_icon) then
         pr("forgetting tracking spot")
         remove_map_spot(victim:id(), spot_icon)
@@ -265,7 +287,7 @@ end
 function start_tracking(npc, amount, dir, who, bone_index)
     
     if who:id() ~= AC_ID then pr("not hit by player") return end
-    local is_monster = is_monster(npc)
+    local is_monster = is_mutant(npc)
     if not IsStalker(npc) and not is_monster then pr("npc not stalker or monster") return end
     if contains(tracking_npc, who:id(), true) then return end
     if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
@@ -307,7 +329,6 @@ function end_tracking_on_loot()
         pr("removing tracking spot")
         remove_tracking_spot(npc_id, spot_icon, true)
         -- create tracking ammo
-        
         alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
     end)
     
@@ -349,10 +370,9 @@ function update_tracking()
                 -- Stop showing active map spot as out of range but don't stop tracking them
                 if dist_to_target > MAX_TRACKING_DIST then
                     --pr("Out of detectable range by %sm, removing mapspot", dist_to_target - MAX_TRACKING_DIST)
-                    if has_map_spot(id, spot_icon) then 
-                        remove_map_spot(id, spot_icon)
-                    end
-
+                    
+                    remove_map_spot(id, spot_icon)
+                    
                     -- last known location
                     if not entry["lost_contact"] then
                         pr("initalising lks for %s", id)
@@ -416,6 +436,7 @@ function on_npc_death(victim, killer)
         if IsAnomaly(killer) then
             alife():create(IGI_DART_AMMO, victim:position(), victim:level_vertex_id(), victim:game_vertex_id())
         end
+        remove_aggro_npc(victim, killer)
     end
 end
 
@@ -429,11 +450,15 @@ function is_aggro_npc(npc_id)
     return contains(aggro_npcs, npc_id, true) and aggro_npcs[npc_id] or false
 end
 
-function update_aggro_npcs(npc, enemy, flags)
-    if not contains(aggro_npcs, npc:id(), true) and enemy:id() == AC_ID then
+function set_aggro_npc(npc)
+    if not contains(aggro_npcs, npc:id(), true) then
         aggro_npcs[npc:id()] = true
-        
-    elseif contains(aggro_npcs, npc:id(), true) and enemy:id() ~= AC_ID and npc:best_enemy():id() ~= AC_ID then
+    end
+end
+
+function remove_aggro_npc(npc, enemy, flags)
+    if contains(aggro_npcs, npc:id(), true) 
+    and not contains(xr_combat_ignore.fighting_with_actor_npcs, npc:id(), true) then
         aggro_npcs[npc:id()] = nil
     end
 end
@@ -457,5 +482,6 @@ function on_game_start()
     RegisterScriptCallback("GUI_on_show", end_tracking_on_loot)
     RegisterScriptCallback("on_before_level_changing", on_transition)
     RegisterScriptCallback("monster_on_loot_init", on_monster_loot)
-    RegisterScriptCallback("on_enemy_eval", update_aggro_npcs)
+    RegisterScriptCallback("npc_on_fighting_actor", set_aggro_npc)
+    RegisterScriptCallback("on_enemy_eval", remove_aggro_npc)
 end
