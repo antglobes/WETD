@@ -28,8 +28,8 @@ get_real_community = wetd_utils.get_real_community
 
 -- Constants
 
-MAX_TRACKING_DIST = 50
-LAST_KNOWN_SPOT_ICON = ""
+MAX_TRACKING_DIST = 30
+LAST_KNOWN_SPOT_ICON = "red_location"
 TRACKING_SPOT_TEXT = "ui_st_pda_tracking"
 LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
 IGI_DART_GUN = "wpn_igi_ks23_ecolog"
@@ -56,8 +56,12 @@ end
 
 -- Helpers
 
+function get_npc_name(npc)
+    return IsStalker(npc) and npc:character_name() or get_mutant_name(npc:section())
+end
+
 function is_mutant(npc)
-    return get_real_community(npc) == "monster" or false
+    return get_real_community(npc) == "monster"
 end
 
 
@@ -79,11 +83,11 @@ end
 
 function get_tracking_info(npc)
     local is_monster = is_mutant(npc)
-    local name = is_monster and capitalise(get_mutant_name(npc:section())) or npc:character_name()
+    local name = get_npc_name(npc)
     local faction = get_real_community(npc)
     local dist = distance_between(npc, db.actor)
     local hint = ""
-    
+
     hint = hint .. yellow_clr ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
     hint = hint .. gray_1_clr .. "Name: " .. pda_white_clr .. name .. "\\n"
     if not contains(faction_to_name, faction, true) then
@@ -145,7 +149,7 @@ end
 -- Tracking Map Spots
 
 function has_map_spot(id, icon)
-    return level.map_has_object_spot(id, icon) ~= 0
+    return level.map_has_object_spot(id, icon) ~= 0 and contains(tracking_npc[id]["spots"], icon) or false
 end
 
 function has_last_known_spot(id)
@@ -153,10 +157,17 @@ function has_last_known_spot(id)
 end
 
 function add_map_spot(id, icon, text, hint)
-    if level.map_has_object_spot(id, icon) == 0 then
-        pr("adding map spot")
+    if not has_map_spot(id, icon) then
+        pr("adding map spot: %s", icon)
         level.map_add_object_spot_ser(id, icon, text)
+
+        if contains(tracking_npc[id], "spots", true) and not contains(tracking_npc[id]["spots"], icon) then
+            tracking_npc[id]["spots"][#tracking_npc[id]["spots"] + 1] = icon
+            pr("%s added to spot list", icon)
+        end
+    
         if hint then
+            pr("adding map spot hint for: %s", id)
             add_map_spot_hint(id, icon, hint)
         end
     end
@@ -167,7 +178,8 @@ function add_map_spot_hint(id, icon, hint)
 end
 
 function remove_map_spot(id, icon)
-    pr("removing map spot")
+    if not has_map_spot(id, icon) then return end
+    pr("removing map spot %s for: %s", icon, id)
     level.map_remove_object_spot(id, icon)
     level.map_remove_object_spot(id, icon)
 end
@@ -190,24 +202,39 @@ function remove_last_known_spot(id, icon, full)
     end
 end
 
-function update_map_spot(id, icon, msg, text, has_spot)
-    if has_spot and level.map_has_object_spot(id, icon) ~= 0 then 
-        level.map_remove_object_spot(id, icon)
-
-    elseif level.map_has_object_spot(id, icon) == 0 then
-        level.map_add_object_spot_ser(id, icon, text)
+function remove_all_spots(id, full)
+    if is_empty(tracking_npc[id]["spots"]) then return end
+    for idx, icon in pairs(tracking_npc[id]["spots"]) do
+        if icon ~= LAST_KNOWN_SPOT_ICON then
+            remove_tracking_spot(id, icon, full)
+        else
+            local lk_info = tracking_npc[id]["last_known_spot"]
+            remove_last_known_spot(lk_info["id"], lk_info["spot"], full)
+            tracking_npc[id]["lost_contact"] = false
+            tracking_npc[id]["last_known_spot"] = nil
+        end
     end
-    pr(msg)
+end
+
+function update_map_spot(id, icon, text)
+    for idx, old_icon in pairs(tracking_npc[id]["spots"]) do
+        if icon ~= old_icon and has_map_spot(id, old_icon) then
+            pr("updating map spot, removing: %s", old_icon)
+            remove_map_spot(id, old_icon)
+        end
+    end
+
+    add_map_spot(id, icon, text)
 end
 
 function init_tracking_spot(npc)
     local id = npc:id()
     local spot_icon = get_map_spot_icon(npc)
+    tracking_npc[id] = {lost_contact=false, timeout=time_global() + MAP_SPOT_TIMEOUT, spots={[1]=spot_icon}}
     add_map_spot(id, spot_icon, TRACKING_SPOT_TEXT)
-    tracking_npc[id] = {lost_contact=false, timeout=time_global() + MAP_SPOT_TIMEOUT}
 end
 
-function init_last_known_spot(npc, entry, tracking_info)
+function init_last_known_spot(npc, entry, tracking_info) --TODO Get last known info, get tracking info
     local id = npc:id()
     local npc_pos = npc:position()
     local spawn_loc = {
@@ -217,9 +244,9 @@ function init_last_known_spot(npc, entry, tracking_info)
     }
     --pr(utils_data.vector_to_string(spawn_loc.pos), spawn_loc.lvl_id, spawn_loc.game_id)
     
-    pr("creating temp_obj for lk map spot")
+    pr("init lk map spot")
     local lks_id = 0
-    local lks_icon = "red_location"
+    local lks_icon = LAST_KNOWN_SPOT_ICON
     local lks_pos = spawn_loc["pos"]
     if entry["last_known_spot"] then
         lks_id = entry["last_known_spot"]["id"]
@@ -236,9 +263,9 @@ function init_last_known_spot(npc, entry, tracking_info)
         local smart_name = get_smart_name(get_closest_smart(npc_pos))                        
         
         if not has_map_spot(lks_id, lks_icon) then
-           add_map_spot(lks_id, lks_icon, gts(LAST_KNOWN_SPOT_TEXT, smart_name), tracking_info["last_known_hint"])
             tracking_npc[id].last_known_spot = {id=lks_id, icon=lks_icon, pos=lks_pos}
-            pr("changing spot to last known")
+           add_map_spot(lks_id, lks_icon, gts(LAST_KNOWN_SPOT_TEXT, smart_name), tracking_info["last_known_hint"])
+            pr("changing spot to last known for: %s", lks_id)
         else
             print("temp obj not created")
         end                            
@@ -249,12 +276,9 @@ end
 function forget_tracking_spot(victim, killer, icon)
     local is_monster = is_mutant(victim)
     if not IsStalker(victim) and not is_monster then pr("npc not stalker or monster") return end
-    --if not contains(tracking_npc, victim:id(), true) then pr("not tracking: %s", victim:id()) return end
+    pr("Forgetting Tracking spot")
     local spot_icon = icon and icon or get_map_spot_icon(victim)
-    if has_map_spot(victim:id(), spot_icon) then
-        pr("forgetting tracking spot")
-        remove_map_spot(victim:id(), spot_icon)
-    end
+    remove_tracking_spot(victim:id(), icon)
     tracking_npc[victim:id()]["lost_contact"] = false
 end
 
@@ -262,18 +286,10 @@ function forget_last_known_spot(id, lk_info, length)
     pr("Forgetting last known spot: %s", length)
     remove_last_known_spot(lk_info["id"], lk_info["spot"])
     if length == "temp" then -- out of range + reuse last known spot
+        pr("%s is out of range, reusing lk info")
         tracking_npc[id]["lost_contact"] = false    
     elseif length == "perm" then -- within range + new last known spot
-        tracking_npc[id]["last_known_spot"] = nil
-    end
-end
-
-function remove_all_spots(id, icon, entry)
-    remove_map_spot(id, icon)
-    if entry["lost_contact"] and entry["last_known_spot"] then
-        local lk_info = entry["last_known_spot"]
-        remove_last_known_spot(lk_info["id"], lk_info["spot"])
-        tracking_npc[id]["lost_contact"] = false
+        pr("%s is within range, using new lk info")
         tracking_npc[id]["last_known_spot"] = nil
     end
 end
@@ -281,6 +297,8 @@ end
 -- Tracking Core
 
 function stop_tracking(id)
+    if not is_tracking(id) then return end
+    pr("stop tracking: %s", id)
     tracking_npc[id] = nil
 end
 
@@ -290,48 +308,36 @@ end
 
 function start_tracking(npc, amount, dir, who, bone_index)
     
-    if who:id() ~= AC_ID then pr("not hit by player") return end
+    if who:id() ~= AC_ID then return end -- pr("not hit by player")
     local is_monster = is_mutant(npc)
-    if not IsStalker(npc) and not is_monster then pr("npc not stalker or monster") return end
+    if not IsStalker(npc) and not is_monster then return end -- pr("npc not stalker or monster")
     if contains(tracking_npc, who:id(), true) then return end
     if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
 
-    pr("player hit %s", is_monster and npc:section() or npc:character_name())
-    pr("starting tracking")
     local wpn = db.actor:active_item()
-    pr("checking wpn is dart gun")
-
     if wpn and string.find(wpn:section(), IGI_DART_GUN) then
-        pr("getting ammo list")
 
         local ammo_list = utils_item.get_ammo(wpn:section())
         if contains(ammo_list, IGI_DART_AMMO) then
-            pr("checking wpn ammo is darts")
+            pr("starting to  track: %s", get_npc_name(npc))
             init_tracking_spot(npc)
         end
     end
 end
 
-function end_tracking_on_loot()
-    CreateTimeEvent("test_funcs_tracking", "remove_last_known_spot", 0, function()
+function stop_tracking_on_loot()
+    CreateTimeEvent("wetd_tracking", "remove_last_known_spot", 0, function()
         local inventory = ui_inventory.GUI
         if not inventory then return true end
 
         local npc = inventory:GetPartner()
         local npc_id = npc and npc:id()
         if not npc_id or inventory.mode ~= "loot" then return true end
-        if not contains(tracking_npc, npc_id, true) then return end
+        if not is_tracking(npc_id) then return end
 
-        pr("removing map spots on loot")
+        pr("stopping tracking for %s on loot", get_npc_name(npc))
+        remove_all_spots(npc_id, true)
 
-        local lk_info = tracking_npc[npc_id]["last_known_spot"]
-        if is_not_empty(lk_info) then
-            pr("removing lk map spot")
-            remove_last_known_spot(lk_info["id"], lk_info["spot"], true)
-        end
-        local spot_icon = get_map_spot_icon(npc)
-        pr("removing tracking spot")
-        remove_tracking_spot(npc_id, spot_icon, true)
         -- create tracking ammo
         alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
     end)
@@ -340,17 +346,9 @@ end
 
 function on_monster_loot(npc)
     local npc_id =  npc:id()
-    if not contains(tracking_npc, npc_id, true) then return end
-
-    local lk_info = tracking_npc[npc_id]["last_known_spot"]
-    if is_not_empty(lk_info) then
-        pr("removing lk map spot")
-        remove_last_known_spot(lk_info["id"], lk_info["spot"], true)
-    end
-    local spot_icon = get_map_spot_icon(npc)
-    pr("removing tracking spot")
-    remove_tracking_spot(npc_id, spot_icon, true)
-
+    if not is_tracking(npc_id) then return end
+    pr("stopping tracking for %s on loot", get_npc_name(npc))
+    remove_all_spots(npc_id, true)
     alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
 end
 
@@ -363,10 +361,11 @@ function update_tracking()
             local spot_icon = get_map_spot_icon(npc)
             local tracking_info = get_tracking_info(npc)
             local dist_to_target = tracking_info["dist"]
+            local npc_name = get_npc_name(npc)
 
             if contains(entry, "timeout", true) and entry["timeout"] <= tg then
-                pr("last known spot timeout")
-                remove_all_spots(id, spot_icon, entry)
+                pr("tracking timeout for %s at %s", npc_name, entry["timeout"])
+                remove_all_spots(id)
                 stop_tracking(id)
                 return
             end
@@ -381,7 +380,7 @@ function update_tracking()
                     
                     -- last known location
                     if not entry["lost_contact"] then
-                        pr("initalising lks for %s", id)
+                        pr("Lost contact with %s", npc_name)
                         init_last_known_spot(npc, entry, tracking_info)
                         if contains(tracking_npc[id], "last_known_spot", true) then
                             tracking_npc[id]["lost_contact"] = true
@@ -404,21 +403,21 @@ function update_tracking()
                 elseif dist_to_target <= MAX_TRACKING_DIST then
                     -- Remove last known spot once in trackable distance
                     if entry["lost_contact"] and entry["last_known_spot"] then
-                        pr("restablishing contact")
+                        pr("restablishing contact with %s", npc_name)
                         local lk_info = entry["last_known_spot"]
                         --pr("target back within range, removing last known spot")
                         forget_last_known_spot(id, lk_info, "perm")                     
                     end
                     -- Show tracking info once in range, contact restablished
-                    local msg = "" --"target in detectable range, showing map spot"
-                    update_map_spot(id, spot_icon, msg, TRACKING_SPOT_TEXT)
-                    level.map_change_spot_hint(id, spot_icon, tracking_info["hint"])
+                    --"target in detectable range, showing map spot"
+                    update_map_spot(id, spot_icon, TRACKING_SPOT_TEXT)
+                    add_map_spot_hint(id, spot_icon, tracking_info["hint"])
                     tracking_npc[id]["lost_contact"] = false
                 end
 
             else
                 -- Remove all possible map spot if not on same level but dont stop tracking
-                remove_all_spots(id, spot_icon, entry)
+                remove_all_spots(id)
             end
         --
         end
@@ -430,26 +429,26 @@ end
 function on_transition()
     local tg = time_global()
     for id, entry in pairs(tracking_npc) do
-        if entry["last_known_spot"] and entry["last_known_spot"]["timeout"] < tg then
-            tracking_npc[id] = nil
+        if entry["last_known_spot"] and contains(entry["last_known_spot"], "timeout", true) and entry["last_known_spot"]["timeout"] <= tg then
+            pr("stopped tracking %s at %s", id, tg)
+            stop_tracking(id)
         end
     end
 end
 
 function on_npc_death(victim, killer)
     if is_tracking(victim:id()) then
-        forget_tracking_spot(victim, killer)
-        if IsAnomaly(killer) then
-            alife():create(IGI_DART_AMMO, victim:position(), victim:level_vertex_id(), victim:game_vertex_id())
-        end
         remove_aggro_npc(victim, killer)
     end
 end
 
-function on_npc_loot_corpse(npc, corpse, item, lootable)
-    if not item:section() == IGI_DART_AMMO or (item:section() == IGI_DART_AMMO and not lootable) then return end
-    if not is_tracking(corpse:id()) then return end
-    alife_create(IGI_DART_AMMO, npc)
+function on_monster_anomaly_death(npc, amount, dir, who, bone_index)
+    local npc_health = npc.health
+    if npc_health <= 0.005 then
+        if IsAnomaly(who) then
+            alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
+        end
+    end
 end
 
 function is_aggro_npc(npc_id)
@@ -482,10 +481,11 @@ end
 function on_game_start()
     RegisterScriptCallback("npc_on_hit_callback", start_tracking)
     RegisterScriptCallback("monster_on_hit_callback", start_tracking)
+    RegisterScriptCallback("monster_on_hit_callback", on_monster_anomaly_death)
     RegisterScriptCallback("npc_on_death_callback", on_npc_death)
     RegisterScriptCallback("monster_on_death_callback", on_npc_death)
     RegisterScriptCallback("actor_on_update", update_tracking)
-    RegisterScriptCallback("GUI_on_show", end_tracking_on_loot)
+    RegisterScriptCallback("GUI_on_show", stop_tracking_on_loot)
     RegisterScriptCallback("on_before_level_changing", on_transition)
     RegisterScriptCallback("monster_on_loot_init", on_monster_loot)
     RegisterScriptCallback("npc_on_fighting_actor", set_aggro_npc)

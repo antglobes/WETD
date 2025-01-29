@@ -29,6 +29,7 @@ faction_to_colour = {
     ["isg"]         = {184, 102, 135},
     ["monster"]     = {74, 46, 16},
     ["default"]     = {250, 250, 250},
+    ["unknown"]     = {250, 250, 250},
 }
 
 faction_to_name = {
@@ -276,10 +277,9 @@ function get_real_community(npc)
 	end
 	local community = character_community(npc)
 	if not community then
-	    local squad_community = get_object_squad(npc):get_squad_community()
-		return squad_community
-	else
-		return community
+		return get_object_squad(npc):get_squad_community()
+    else
+        return community
 	end
 end
 
