@@ -6,4 +6,41 @@
     <string id="ui_st_pda_last_known">
         <text>Last Known Location: %s</text>
     </string>
+
+    <string id="st_ammo_23_wetd_tracker_normal">
+        <text>23mm Dart w/ Tracking Device</text>
+    </string>
+    <string id="st_ammo_23_wetd_tracker_normal_descr">
+        <text>Developed by cHAZ Research Institute in collaboration with the Ukrainian Military, </text>
+    </string>
+
+    <string id="st_ammo_23_wetd_tracker_vet">
+        <text>Veterinary 23mm Dart w/ Tracking Device</text>
+    </string>
+    <string id="st_ammo_23_wetd_tracker_vet_descr">
+        <text>After the success of the prototype of the 23mm dart w/ tracking device, some of the
+              field researchers pettioned Professor Herman to get a specialised version which would enchance their
+              research into the behavioural studies of mutants in the zone. This new ammo type proved so useful
+              in it's purpose that after an incident where a unaware stalker was hit with it in the stomach and
+              survived, that the military saw that this could be used to "other" purposes.</text>
+    </string>
+
+    <string id="st_ammo_23_wetd_tracker_sig">
+        <text>Experimental 23mm Dart w/ Tracking Device</text>
+    </string>
+    <string id="st_ammo_23_wetd_tracker_sig_descr">
+        <text>Tasked to retrive a veterinarian dart that was dropped in the "" anomaly in Truck Cemetary, a field researcher found out
+        that due to the interaction of the liquid crystals combined with electrical attributes of the "" anomaly that the dart had 
+        absorbed it's effect. Seemingly unchanged the field researcher thought to use the dart like any other to track a target but 
+        ended up exploding. Once their body was discovered and the remains dragged back to Yantar, the scientists where able to form
+        a hypothesis that: "The reason he exploded was due to the supercharged dart coming in contact with another dart". </text>
+    </string>
 </string_table>
+		<text>This ammunition was developed by ChAZ Research Institute according
+         to the special order from Professors Herman and Ozersky, after a successful
+          series of studies in the center of the zone in 2012.  It is a 23mm caliber
+           dart with an ampoule filled with organic liquid crystals synthesized under
+            a strong vacuum.  Because of extreme complexity and high cost of
+             manufacturing, these darts are highly valued by research groups deployed
+              on the territory of ChAZ. Their only disadvantage is the extremely fragile
+               construction, requiring careful handling.</text>

@@ -46,6 +46,7 @@ faction_to_name = {
     ["renegade"]    = "Renegade",
     ["isg"]         = "ISG",
     ["monster"]     = "Mutant",
+    ["unknown"]     = "Unknown",
 }
 
 special_character_faction = {
@@ -244,6 +245,28 @@ function contains(tbl, key, by_key, return_value, return_idx)
 end
 
 -- Game Objects
+
+--- Author: NLTP_ASHES 31/10/23 Sourced: 30/01/25
+--- Function used to retrieve the section name of the current ammo type loaded in a weapon
+--- @param obj game_object the weapon to get the ammo type from
+--- @return string the name of the section of the currently loaded ammo type
+function get_ammo_type(obj)
+    local ammo_class_id = get_ammo_class_id(obj)
+    local ammo_classes = parse_list(ini_sys, obj:section(), "ammo_class")
+    return ammo_classes[ammo_class_id+1]
+end
+
+--- Author: NLTP_ASHES 31/10/23 Sourced: 30/01/25
+--- Function used to retrieve the id of the current ammo type loaded in a weapon
+--- @param obj game_object the weapon to get the ammo type from
+--- @return number the id of the ammo type in the ammo_class field of the weapon's config
+function get_ammo_class_id(obj)
+    if not obj:is_weapon() then
+        printf("!ERROR | Trying to access ammo type on a non CWeapon object")
+        return
+    end
+    return obj:cast_Weapon():GetAmmoType()
+end
 
 --- Authored by NLTP_ASHES 17/02/24 Anomaly Discord
 function get_unknown_object(obj, result_obj_type)

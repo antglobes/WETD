@@ -25,6 +25,7 @@ is_enemy = wetd_utils.is_enemy
 is_friend = wetd_utils.is_friend
 is_story_npc = wetd_utils.is_story_npc
 get_real_community = wetd_utils.get_real_community
+get_ammo_type = wetd_utils.get_ammo_type
 
 -- Constants
 
@@ -37,6 +38,11 @@ IGI_DART_AMMO = "ammo_23_igi_eco"
 EXPECTED_SCRIPTS = {"igi_utils"}
 MAP_SPOT_TIMEOUT = 300000 --- 5 MINTUES
 MAP_SPOT_ICON_PREFIX = "unknown_"
+TRACKER_AMMO_NORMAL  = "ammo_23_wetd_tracker_normal"
+TRACKER_AMMO_VET = "ammo_23_wetd_tracker_vet"
+TRACKER_AMMO_SIG = "ammo_23_wetd_tracker_sig"
+ACCEPTED_AMMO_TYPES = parse_list(ini_sys, IGI_DART_GUN, "ammo_class")
+
 
 
 -- Globals (script)
@@ -53,6 +59,10 @@ local red_clr = utils_xml.get_color("d_red")
 function pr(str, ...)
     wetd_utils.dbg_pr("WETD | Main: %s", str, ...)
 end
+
+-- Known Stalkers
+
+
 
 -- Helpers
 
@@ -81,36 +91,74 @@ function get_connection_stren(stren)
 
 end
 
-function get_tracking_info(npc)
-    local is_monster = is_mutant(npc)
+function get_hint(npc, hint_keys)
+    local hint = yellow_clr ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
+    local knows_stalker = is_known_stalker(npc:id())
     local name = get_npc_name(npc)
-    local faction = get_real_community(npc)
-    local dist = distance_between(npc, db.actor)
-    local hint = ""
-
-    hint = hint .. yellow_clr ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
-    hint = hint .. gray_1_clr .. "Name: " .. pda_white_clr .. name .. "\\n"
-    if not contains(faction_to_name, faction, true) then
-        faction = special_character_faction[name]
+    
+    if not knows_stalker then
+        name = "Unknown"
     end
-    hint = hint .. gray_1_clr .. "Faction: " .. strformat("%c[255, %s, %s, %s]", unpack(faction_to_colour[faction])) .. faction_to_name[faction] .. "\\n"
 
+    if contains(hint_keys, "name") then
+        hint = hint .. gray_1_clr .. "Name: " .. pda_white_clr .. name .. "\\n"
+
+    elseif contains(hint_keys, "faction") then
+        local faction = get_real_community(npc)
+
+        if not knows_stalker then
+            faction = "unknown"
+        end
+
+        if not contains(faction_to_name, faction, true) then
+            faction = special_character_faction[name]
+        end
+        hint = hint .. gray_1_clr .. "Faction: " .. strformat("%c[255, %s, %s, %s]", unpack(faction_to_colour[faction])) .. faction_to_name[faction] .. "\\n"
+
+    elseif contains(hint_keys, "health") then
+        local npc_health = npc.health > 0 and npc.health or 0
+        hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", round(npc_health * 100)) .. "%\\n"
+
+    elseif contains(hint_keys, "distance") then
+        local dist = distance_between(npc, db.actor)
+
+        if knows_stalker then
+            hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
+        else
+            hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
+        end
+
+    elseif contains(hint_keys, "attitude") then
+        local attitude = get_npc_attitude(npc)
+        hint = hint .. gray_1_clr .. "Attitude: " .. get_attitude_clr(attitude) .. capitalise(attitude) .. "\n"    
+    end
+
+    return hint
+end
+
+function get_last_known_hint(npc)
+    local hint = get_hint(npc, {"name", "faction"})
     local smart_name = gts(get_closest_smart(npc:position()):name())
     local last_known_hint = hint .. gray_1_clr .. "Last Known Location:\\n" .. red_clr .. get_smart_name(get_closest_smart(npc)) .. "\\n"
+    return last_known_hint
+end
 
-    local npc_health = npc.health > 0 and npc.health or 0
-    hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", round(npc_health * 100)) .. "%\\n"
-    hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
-    hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
-    
-    local attitude = get_npc_attitude(npc)
-    hint = hint .. gray_1_clr .. "Attitude: " .. get_attitude_clr(attitude) .. capitalise(attitude) .. "\n"
+function get_tracking_info(npc) -- ui enemy health
+    local dist = distance_between(npc, db.actor)
+    local ammo_type = get_tracker_ammo(npc:id())
+    local hint = ""
 
-    return  {hint=hint, last_known_hint=last_known_hint, dist=dist} 
+    if ammo_type == TRACKER_AMMO_NORMAL then
+        hint = get_hint(npc, {"name", "faction", "distance"})
+    elseif ammo_type == TRACKER_AMMO_VET then
+        hint = get_hint(npc, {"name", "faction", "health", "distance", "attitude"})
+    end
+
+    return  {hint=hint, last_known_hint=get_last_known_hint(npc), dist=dist} 
 end
 
 function get_attitude_clr(attitude)
-    if not attitude or attitude and attitude == "passive" then attitude = "neutral" end
+    if not attitude or attitude and attitude == "passive" then attitude = "friend" end
     if attitude == "aggressive" then
         attitude = "enemy"
     end
@@ -144,6 +192,10 @@ function get_map_spot_icon(npc) --TODO Alter based on upgrades
         spot_icon = spot_icon .. "stalker_" .. attitude
     end
     return spot_icon
+end
+
+function get_tracker_ammo(id)
+    return contains(tracking_npc[id], "ammo_type", true) and tracking_npc[id]["ammo_type"]
 end
 
 -- Tracking Map Spots
@@ -227,10 +279,16 @@ function update_map_spot(id, icon, text)
     add_map_spot(id, icon, text)
 end
 
-function init_tracking_spot(npc)
+function init_tracking_spot(npc, ammo_type)
     local id = npc:id()
     local spot_icon = get_map_spot_icon(npc)
-    tracking_npc[id] = {lost_contact=false, timeout=time_global() + MAP_SPOT_TIMEOUT, spots={[1]=spot_icon}}
+    tracking_npc[id] = {
+        lost_contact=false,
+        timeout=time_global() + MAP_SPOT_TIMEOUT,
+        spots={[1]=spot_icon},
+        ammo_type=ammo_type,
+    
+    }
     add_map_spot(id, spot_icon, TRACKING_SPOT_TEXT)
 end
 
@@ -317,10 +375,10 @@ function start_tracking(npc, amount, dir, who, bone_index)
     local wpn = db.actor:active_item()
     if wpn and string.find(wpn:section(), IGI_DART_GUN) then
 
-        local ammo_list = utils_item.get_ammo(wpn:section())
-        if contains(ammo_list, IGI_DART_AMMO) then
+        local ammo_type = get_ammo_type(wpn)
+        if contains(ACCEPTED_AMMO_TYPES, ammo_type) then
             pr("starting to  track: %s", get_npc_name(npc))
-            init_tracking_spot(npc)
+            init_tracking_spot(npc, ammo_type)
         end
     end
 end
@@ -339,7 +397,8 @@ function stop_tracking_on_loot()
         remove_all_spots(npc_id, true)
 
         -- create tracking ammo
-        alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
+        local ammo_type = get_tracker_ammo(npc:id())
+        alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
     end)
     
 end
@@ -349,7 +408,8 @@ function on_monster_loot(npc)
     if not is_tracking(npc_id) then return end
     pr("stopping tracking for %s on loot", get_npc_name(npc))
     remove_all_spots(npc_id, true)
-    alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
+    local ammo_type = get_tracker_ammo(npc:id())
+    alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
 end
 
 function update_tracking()
@@ -363,10 +423,9 @@ function update_tracking()
             local dist_to_target = tracking_info["dist"]
             local npc_name = get_npc_name(npc)
 
-            if contains(entry, "timeout", true) and entry["timeout"] <= tg then
+            if contains(entry, "timeout", true) and tg >= entry["timeout"] then
                 pr("tracking timeout for %s at %s", npc_name, entry["timeout"])
-                remove_all_spots(id)
-                stop_tracking(id)
+                remove_all_spots(id, true)
                 return
             end
 
@@ -429,9 +488,9 @@ end
 function on_transition()
     local tg = time_global()
     for id, entry in pairs(tracking_npc) do
-        if entry["last_known_spot"] and contains(entry["last_known_spot"], "timeout", true) and entry["last_known_spot"]["timeout"] <= tg then
+        if contains(entry, "timeout", true) and tg >= entry["timeout"] then
             pr("stopped tracking %s at %s", id, tg)
-            stop_tracking(id)
+            remove_all_spots(id, true)
         end
     end
 end
@@ -446,7 +505,8 @@ function on_monster_anomaly_death(npc, amount, dir, who, bone_index)
     local npc_health = npc.health
     if npc_health <= 0.005 then
         if IsAnomaly(who) then
-            alife():create(IGI_DART_AMMO, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
+            local ammo_type = get_tracker_ammo(npc:id())
+            alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
         end
     end
 end
@@ -468,16 +528,6 @@ function remove_aggro_npc(npc, enemy, flags)
     end
 end
 
---[[
- (IsStalker(npc) and game_relations.is_faction_enemies(npc:character_community(), db.actor:character_community()))
-    elseif contains(aggro_npcs, npc:id(), true) and enemy:id() == AC_ID then
-        if not xr_combat_ignore.is_enemy(npc, enemy) then
-            aggro_npcs[npc:id()] = nil
-        end
-    end
-]]
-
-
 function on_game_start()
     RegisterScriptCallback("npc_on_hit_callback", start_tracking)
     RegisterScriptCallback("monster_on_hit_callback", start_tracking)
@@ -486,7 +536,7 @@ function on_game_start()
     RegisterScriptCallback("monster_on_death_callback", on_npc_death)
     RegisterScriptCallback("actor_on_update", update_tracking)
     RegisterScriptCallback("GUI_on_show", stop_tracking_on_loot)
-    RegisterScriptCallback("on_before_level_changing", on_transition)
+    --RegisterScriptCallback("on_before_level_changing", on_transition)
     RegisterScriptCallback("monster_on_loot_init", on_monster_loot)
     RegisterScriptCallback("npc_on_fighting_actor", set_aggro_npc)
     RegisterScriptCallback("on_enemy_eval", remove_aggro_npc)

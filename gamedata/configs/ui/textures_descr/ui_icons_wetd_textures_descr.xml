@@ -5,12 +5,12 @@ Purpose: Texture Defintions
 -->
 
 <w>
-    <file name="ui\ui_wetd_unknown_npc_map_spots">
-        <texture id="ui_icons_wetd_unknown_stalker_neutral_spot"   x="0" y="0" width="50" height="50" />
-        <texture id="ui_icons_wetd_unknown_stalker_enemy_spot"     x="50" y="50" width="50" height="50" />
-        <texture id="ui_icons_wetd_unknown_stalker_friend_spot"    x="50" y="0" width="50" height="50" />
-        <texture id="ui_icons_wetd_unknown_stalker_story_spot"     x="0" y="50" width="50" height="50" />
-        <texture id="ui_icons_wetd_unknown_mutant_passive_spot"    x="100" y="0" width="50" height="50" />
-        <texture id="ui_icons_wetd_unknown_mutant_aggressive_spot" x="100" y="50" width="50" height="50" />
+    <file name="ui\ui_icons_wetd">
+        <texture id="ui_icons_wetd_unknown_stalker_neutral_spot"   x="0" y="150" width="50" height="50" />
+        <texture id="ui_icons_wetd_unknown_stalker_enemy_spot"     x="50" y="200" width="50" height="50" />
+        <texture id="ui_icons_wetd_unknown_stalker_friend_spot"    x="50" y="150" width="50" height="50" />
+        <texture id="ui_icons_wetd_unknown_stalker_story_spot"     x="0" y="200" width="50" height="50" />
+        <texture id="ui_icons_wetd_unknown_mutant_passive_spot"    x="100" y="150" width="50" height="50" />
+        <texture id="ui_icons_wetd_unknown_mutant_aggressive_spot" x="100" y="200" width="50" height="50" />
     </file>
 </w>
