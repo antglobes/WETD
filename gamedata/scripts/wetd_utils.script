@@ -7,6 +7,33 @@ Purpose: Utility Script
 
 -- Tables
 
+mutant_name_to_article = {
+    dog           = "encyclopedia_mutants_blind_dog",
+    bloodsucker   = "encyclopedia_mutants_bloodsucker",
+    boar          = "encyclopedia_mutants_boar",
+    burer         = "encyclopedia_mutants_burer",
+    cat           = "encyclopedia_mutants_cat",
+    chimera       = "encyclopedia_mutants_chimera",
+    controller    = "encyclopedia_mutants_controller",
+    crow          = "encyclopedia_mutants_crow",
+    flesh         = "encyclopedia_mutants_flesh",
+    fracture      = "encyclopedia_mutants_fracture",
+    karlik        = "encyclopedia_mutants_karlik",
+    poltergeist   = "encyclopedia_mutants_poltergeist",
+    psuedodog     = "encyclopedia_mutants_pseudodog",
+    pseudogeist   = "encyclopedia_mutants_pseudogeist",
+    pseudogiant   = "encyclopedia_mutants_pseudogiant",
+    psydog        = "encyclopedia_mutants_psydog",
+    pyrogeist     = "encyclopedia_mutants_pyrogeist",
+    rat           = "encyclopedia_mutants_rat",
+    snork         = "encyclopedia_mutants_snork",
+    tushkano      = "encyclopedia_mutants_tushkano",
+    zombie        = "encyclopedia_mutants_zombie",
+    lurker        = "encyclopedia_mutants_lurker",
+    psysucker     = "encyclopedia_mutants_psysucker",
+    rotan         = "encyclopedia_mutants_rat",
+}
+
 attitude_to_clr = {
     ["enemy"]   = {184, 40, 43},
     ["story"]   = {206, 104, 32},

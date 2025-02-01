@@ -26,10 +26,12 @@ is_friend = wetd_utils.is_friend
 is_story_npc = wetd_utils.is_story_npc
 get_real_community = wetd_utils.get_real_community
 get_ammo_type = wetd_utils.get_ammo_type
+is_unlocked_article = ui_pda_encyclopedia_tab.is_unlocked_article
+mutant_name_to_article = wetd_utils.mutant_name_to_article
 
 -- Constants
 
-MAX_TRACKING_DIST = 30
+MAX_TRACKING_DIST = 50
 LAST_KNOWN_SPOT_ICON = "red_location"
 TRACKING_SPOT_TEXT = "ui_st_pda_tracking"
 LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
@@ -47,6 +49,7 @@ ACCEPTED_AMMO_TYPES = parse_list(ini_sys, IGI_DART_GUN, "ammo_class")
 
 -- Globals (script)
 local tracking_npc = {}
+local known_stalkers = {}
 local aggro_npcs = {}
 local yellow_clr = utils_xml.get_color("yellow")
 local gray_1_clr = utils_xml.get_color("ui_gray_1")
@@ -62,7 +65,28 @@ end
 
 -- Known Stalkers
 
+function is_known_stalker(npc_id)
+    return contains(known_stalkers, npc_id, true)
+end
 
+function get_known_stalker(npc_id)
+    if not npc_id then
+        return known_stalkers
+    end
+    return known_stalkers[npc_id]
+end
+
+function remember_stalker(npc)
+    if not IsStalker(npc) or is_known_stalker(npc:id()) or npc:id() == AC_ID then return end
+    pr("Remembering Stalker: %s", get_npc_name(npc))
+    known_stalkers[npc:id()] = {name=get_npc_name(npc), faction=get_real_community(npc)}
+end
+
+function forget_stalker(npc_id)
+    if not is_known_stalker(npc_id) then return end
+    pr("Forgetting stalker: %s", get_npc_name(get_unknown_object({id=npc_id}, "game")))
+    known_stalkers[npc_id] = nil
+end
 
 -- Helpers
 
@@ -96,17 +120,19 @@ function get_hint(npc, hint_keys)
     local knows_stalker = is_known_stalker(npc:id())
     local name = get_npc_name(npc)
     
-    if not knows_stalker then
+
+    if is_mutant(npc) and not is_unlocked_article(mutant_name_to_article[name]) or not knows_stalker then
         name = "Unknown"
     end
 
     if contains(hint_keys, "name") then
         hint = hint .. gray_1_clr .. "Name: " .. pda_white_clr .. name .. "\\n"
+    end
 
-    elseif contains(hint_keys, "faction") then
+    if contains(hint_keys, "faction") then
         local faction = get_real_community(npc)
 
-        if not knows_stalker then
+        if is_mutant(npc) and not is_unlocked_article(mutant_name_to_article[name]) or not knows_stalker then
             faction = "unknown"
         end
 
@@ -114,21 +140,24 @@ function get_hint(npc, hint_keys)
             faction = special_character_faction[name]
         end
         hint = hint .. gray_1_clr .. "Faction: " .. strformat("%c[255, %s, %s, %s]", unpack(faction_to_colour[faction])) .. faction_to_name[faction] .. "\\n"
+    end
 
-    elseif contains(hint_keys, "health") then
+    if contains(hint_keys, "health") then
         local npc_health = npc.health > 0 and npc.health or 0
         hint = hint .. gray_1_clr .. "Health: " .. get_condition_colour(npc.health) .. strformat("%s", round(npc_health * 100)) .. "%\\n"
+    end
 
-    elseif contains(hint_keys, "distance") then
+    if contains(hint_keys, "distance") then
         local dist = distance_between(npc, db.actor)
 
-        if knows_stalker then
+        if is_mutant(npc) and is_unlocked_article(mutant_name_to_article[name]) or knows_stalker then
             hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
         else
             hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
         end
+    end
 
-    elseif contains(hint_keys, "attitude") then
+    if contains(hint_keys, "attitude") then
         local attitude = get_npc_attitude(npc)
         hint = hint .. gray_1_clr .. "Attitude: " .. get_attitude_clr(attitude) .. capitalise(attitude) .. "\n"    
     end
@@ -256,16 +285,21 @@ end
 
 function remove_all_spots(id, full)
     if is_empty(tracking_npc[id]["spots"]) then return end
-    for idx, icon in pairs(tracking_npc[id]["spots"]) do
+    pr("removing all spots for: %s", id)
+    pr("stop tracking?: %s", full)
+    for idx, icon in pairs(tracking_npc[id]["spots"]) do      
+        pr("idx: %s, icon: %s", idx, icon)  
         if icon ~= LAST_KNOWN_SPOT_ICON then
-            remove_tracking_spot(id, icon, full)
+            remove_tracking_spot(id, icon)
         else
             local lk_info = tracking_npc[id]["last_known_spot"]
-            remove_last_known_spot(lk_info["id"], lk_info["spot"], full)
+            remove_last_known_spot(lk_info["id"], lk_info["spot"])
+           
             tracking_npc[id]["lost_contact"] = false
             tracking_npc[id]["last_known_spot"] = nil
         end
     end
+    if full then stop_tracking(id) end
 end
 
 function update_map_spot(id, icon, text)
@@ -318,11 +352,11 @@ function init_last_known_spot(npc, entry, tracking_info) --TODO Get last known i
     end
 
     --CreateTimeEvent("test_funcs_tracking", "delay_temp_obj_spawn", 0, function()
-        local smart_name = get_smart_name(get_closest_smart(npc_pos))                        
         
         if not has_map_spot(lks_id, lks_icon) then
+            local smart_name = get_smart_name(get_closest_smart(npc_pos))                        
             tracking_npc[id].last_known_spot = {id=lks_id, icon=lks_icon, pos=lks_pos}
-           add_map_spot(lks_id, lks_icon, gts(LAST_KNOWN_SPOT_TEXT, smart_name), tracking_info["last_known_hint"])
+            add_map_spot(lks_id, lks_icon, gts(LAST_KNOWN_SPOT_TEXT, smart_name), tracking_info["last_known_hint"])
             pr("changing spot to last known for: %s", lks_id)
         else
             print("temp obj not created")
@@ -344,10 +378,10 @@ function forget_last_known_spot(id, lk_info, length)
     pr("Forgetting last known spot: %s", length)
     remove_last_known_spot(lk_info["id"], lk_info["spot"])
     if length == "temp" then -- out of range + reuse last known spot
-        pr("%s is out of range, reusing lk info")
+        pr("%s is out of range, reusing lk info", id)
         tracking_npc[id]["lost_contact"] = false    
     elseif length == "perm" then -- within range + new last known spot
-        pr("%s is within range, using new lk info")
+        pr("%s is within range, using new lk info", id)
         tracking_npc[id]["last_known_spot"] = nil
     end
 end
@@ -393,12 +427,13 @@ function stop_tracking_on_loot()
         if not npc_id or inventory.mode ~= "loot" then return true end
         if not is_tracking(npc_id) then return end
 
-        pr("stopping tracking for %s on loot", get_npc_name(npc))
+        local ammo_type = get_tracker_ammo(npc_id)
+        alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id(), npc_id)
+
+        pr("stopping tracking for %s on normal loot", get_npc_name(npc))
         remove_all_spots(npc_id, true)
 
         -- create tracking ammo
-        local ammo_type = get_tracker_ammo(npc:id())
-        alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
     end)
     
 end
@@ -406,10 +441,17 @@ end
 function on_monster_loot(npc)
     local npc_id =  npc:id()
     if not is_tracking(npc_id) then return end
-    pr("stopping tracking for %s on loot", get_npc_name(npc))
+    pr("stopping tracking for %s on mutant loot", get_npc_name(npc))
+    local looter_id = false
+    level.iterate_nearest(npc:position(), 1.5, function(obj)
+        if not IsStalker(obj) then return end
+        looter_id = obj:id()
+        pr("Found looter: %s", get_npc_name(obj))
+    end)
+    
+    local ammo_type = get_tracker_ammo(npc_id)
+    alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id(), looter_id)
     remove_all_spots(npc_id, true)
-    local ammo_type = get_tracker_ammo(npc:id())
-    alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id())
 end
 
 function update_tracking()
@@ -499,6 +541,7 @@ function on_npc_death(victim, killer)
     if is_tracking(victim:id()) then
         remove_aggro_npc(victim, killer)
     end
+    forget_stalker(victim:id())
 end
 
 function on_monster_anomaly_death(npc, amount, dir, who, bone_index)
@@ -528,6 +571,28 @@ function remove_aggro_npc(npc, enemy, flags)
     end
 end
 
+-- Stalker Npcs: Trade, Loot, Dialog
+-- Mutants Npcs: Article
+function remember_stalker_on_interaction(gui_name)
+    if not contains({"UIInventory", "Dialog"}, gui_name) then return end
+    local npc = false
+    pr("GUI showing: %s", gui_name)
+    if gui_name == "Dialog" then
+        npc = get_speaker(true)
+        
+    elseif gui_name == "UIInventory" then
+        local inventory = ui_inventory.GUI
+        if not inventory then return true end
+
+        npc = inventory:GetPartner()
+    end
+
+    if not npc or (npc and npc:id() == AC_ID) then return end
+    if not npc.alive and npc:alive() then return end
+    pr("npc found: %s", get_npc_name(npc))
+    remember_stalker(npc)        
+end
+
 function on_game_start()
     RegisterScriptCallback("npc_on_hit_callback", start_tracking)
     RegisterScriptCallback("monster_on_hit_callback", start_tracking)
@@ -536,7 +601,7 @@ function on_game_start()
     RegisterScriptCallback("monster_on_death_callback", on_npc_death)
     RegisterScriptCallback("actor_on_update", update_tracking)
     RegisterScriptCallback("GUI_on_show", stop_tracking_on_loot)
-    --RegisterScriptCallback("on_before_level_changing", on_transition)
+    RegisterScriptCallback("GUI_on_show", remember_stalker_on_interaction)
     RegisterScriptCallback("monster_on_loot_init", on_monster_loot)
     RegisterScriptCallback("npc_on_fighting_actor", set_aggro_npc)
     RegisterScriptCallback("on_enemy_eval", remove_aggro_npc)
