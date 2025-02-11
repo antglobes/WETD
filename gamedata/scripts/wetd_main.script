@@ -91,7 +91,7 @@ end
 
 
 function give_electric_shock(npc, power, timeout)
-    pr("Giving electric shock")
+    pr("Giving electric shock to: %s", get_npc_name(npc))
     if not power then power = 0.1 end
     if not timeout then timeout = 0.4 end
 
@@ -107,8 +107,11 @@ function give_electric_shock(npc, power, timeout)
     level.add_pp_effector("snd_shock.ppe", 667, true)
     level.set_pp_effector_factor(667,h.power)
 
+    local dir = npc:id() == AC_ID and device().cam_dir or npc:direction()
+    local y = dir.y <= 0 and 0 or 1.5
+    pr("dir y: %s, effect y: %s", dir.y, y)
     local pos = npc:position()
-    local shock_id = demonized_particles.add("anomaly2\\electra_damage_02_smoke", pos:add(vector():set(0, 1.5, 0.5)), timeout * 1000)
+    local shock_id = demonized_particles.add("anomaly2\\electra_damage_02_smoke", pos:add(vector():set(0, y, 0)), timeout * 1000)
     local shock = demonized_particles.get(shock_id)
 
     --xr_sound.play_sound_looped(AC_ID, "anomaly\\electra_blast")
@@ -118,8 +121,8 @@ function give_electric_shock(npc, power, timeout)
     shock_snd:play_no_feedback(npc, 0, 0, npc:position(), 1.0, 1.0)
     -- play no feedback guitar
 
-    local is_actor = npc and npc:id() == AC_ID or false
-    local itm = is_actor and db.actor:active_item() or npc:active_item() and npc:best_weapon()
+    
+    local itm = npc:id() == AC_ID and db.actor:active_item() or npc:active_item() and npc:best_weapon()
     if itm then npc:drop_item(itm) end
 
     CreateTimeEvent("wetd_main", "remove_electric_effect", timeout, function()
@@ -133,7 +136,7 @@ end
 -- Helpers
 
 function get_npc_name(npc)
-    return IsStalker(npc) and npc:character_name() or get_mutant_name(npc:section())
+    return IsStalker(npc) and npc:id() == AC_ID and alife():actor():character_name() or IsStalker(npc) and npc:character_name() or get_mutant_name(npc:section())
 end
 
 function is_mutant(npc)
@@ -268,6 +271,23 @@ end
 function get_tracker_ammo(id)
     return contains(tracking_npc[id], "ammo_type", true) and tracking_npc[id]["ammo_type"]
 end
+
+function create_tracker_ammo(npc, looter_id)
+    local npc_id = npc:id()
+    local can_create = false
+    local ammo_type = get_tracker_ammo(npc_id)
+    if not has_exploded(npc_id) then
+        can_create = true
+        if ammo_type == TRACKER_AMMO_SIG then
+            give_electric_shock(npc)
+        end
+    end
+    
+    if can_create then
+        alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id(), looter_id)
+    end
+end
+
 
 -- Tracking Map Spots
 
@@ -459,6 +479,14 @@ function start_tracking(npc, amount, dir, who, bone_index)
     end
 end
 
+function has_exploded(npc_id)
+    return is_tracking(npc_id) and contains(tracking_npc[npc_id], "exploded", true) and tracking_npc[npc_id]["exploded"]
+end
+
+function set_exploded(npc_id, val)
+    tracking_npc[npc_id]["exploded"] = val
+end
+
 function stop_tracking_on_loot()
     CreateTimeEvent("wetd_tracking", "remove_last_known_spot", 0, function()
         local inventory = ui_inventory.GUI
@@ -469,16 +497,11 @@ function stop_tracking_on_loot()
         if not npc_id or inventory.mode ~= "loot" then return true end
         if not is_tracking(npc_id) then return end
 
-        local ammo_type = get_tracker_ammo(npc_id)
-        if ammo_type == TRACKER_AMMO_SIG then
-            give_electric_shock(npc)
-        end
-        alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id(), npc_id)
-
         pr("stopping tracking for %s on normal loot", get_npc_name(npc))
+        create_tracker_ammo(npc, npc_id)
         remove_all_spots(npc_id, true)
 
-        -- create tracking ammo
+        return true
     end)
     
 end
@@ -486,6 +509,7 @@ end
 function on_monster_loot(npc)
     local npc_id =  npc:id()
     if not is_tracking(npc_id) then return end
+    
     pr("stopping tracking for %s on mutant loot", get_npc_name(npc))
     local looter_id = false
     level.iterate_nearest(npc:position(), 1.5, function(obj)
@@ -494,11 +518,7 @@ function on_monster_loot(npc)
         pr("Found looter: %s", get_npc_name(obj))
     end)
     
-    local ammo_type = get_tracker_ammo(npc_id)
-    if ammo_type == TRACKER_AMMO_SIG then
-        give_electric_shock(npc)
-    end
-    alife():create(ammo_type, npc:position(), npc:level_vertex_id(), npc:game_vertex_id(), looter_id)
+    create_tracker_ammo(npc, looter_id)
     remove_all_spots(npc_id, true)
 end
 
@@ -656,11 +676,17 @@ function on_npc_update(npc)
     level.iterate_nearest(npc:position(), SIG_DET_RANGE, function(obj)
         if not IsStalker(obj) and not is_mutant(obj) then return end
         if obj:id() ~= npc:id() and is_tracking(obj:id()) and (obj.alive and obj:alive()) then
-            pr("Found npc in detonatation range: %s", get_npc_name(npc))
+            pr("Found npc (%s) in detonatation range: %sm", get_npc_name(npc), round_idp(dist_to_pos(npc, obj:position()), 2))
             cause_explo = true
+            set_exploded(obj:id(), true) 
         end
     end)
-    if cause_explo then singularity_explode(npc) end
+    if cause_explo then 
+        singularity_explode(npc)
+        return
+    end
+    if has_exploded(npc:id()) then return end
+    set_exploded(npc:id(), false) 
 end
 
 function singularity_explode(npc)
@@ -680,9 +706,11 @@ function singularity_explode(npc)
             "anomaly2\\electra_damage_02_smoke",
         },
         explosion_particles = "explosions\\explosion_dynamite",
+        lifetime = 0.1,
     }
     demonized_aoe.AOE(args)
-    pr("blown up")
+    pr("%s has blown up", get_npc_name(npc))
+    set_exploded(npc:id(), true)
 end
 
 function on_game_start()
