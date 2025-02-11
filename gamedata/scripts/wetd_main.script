@@ -580,7 +580,7 @@ function on_transition()
     for id, entry in pairs(tracking_npc) do
         if contains(entry, "timeout", true) and tg >= entry["timeout"] then
             pr("stopped tracking %s at %s", id, tg)
-            remove_all_spots(id, true)
+            remove_all_spots(id)
         end
     end
 end
@@ -663,7 +663,7 @@ function on_npc_update(npc)
     if cause_explo then singularity_explode(npc) end
 end
 
-function singularity_explode(npc, timeout)
+function singularity_explode(npc)
     pr("attempting to blow up npc")
     local args = {
         radius = SIG_DET_RANGE * 1.5,
