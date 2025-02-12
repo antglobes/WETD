@@ -31,19 +31,20 @@ mutant_name_to_article = wetd_utils.mutant_name_to_article
 
 -- Constants
 
-MAX_TRACKING_DIST = 50
+MAX_TRACKING_DIST = 2000
 LAST_KNOWN_SPOT_ICON = "red_location"
 TRACKING_SPOT_TEXT = "ui_st_pda_tracking"
 LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
 IGI_DART_GUN = "wpn_igi_ks23_ecolog"
 IGI_DART_AMMO = "ammo_23_igi_eco"
-MAP_SPOT_TIMEOUT = 300000 --- 5 MINTUES
+WETD_DART_GUN = "wpn_igi_ks23_ecolog_wetd"
+MAP_SPOT_TIMEOUT = 300 --- 5 MINTUES
 MAP_SPOT_ICON_PREFIX = "unknown_"
 TRACKER_AMMO_NORMAL  = "ammo_23_wetd_tracker_normal"
 TRACKER_AMMO_VET = "ammo_23_wetd_tracker_vet"
 TRACKER_AMMO_SIG = "ammo_23_wetd_tracker_sig"
-ACCEPTED_AMMO_TYPES = parse_list(ini_sys, IGI_DART_GUN, "ammo_class")
-SIG_DET_RANGE = MAX_TRACKING_DIST * 0.2
+ACCEPTED_AMMO_TYPES = parse_list(ini_sys, WETD_DART_GUN, "ammo_class")
+SIG_DET_RANGE = 15
 
 
 -- Globals (script)
@@ -380,10 +381,9 @@ function init_tracking_spot(npc, ammo_type)
     local spot_icon = get_map_spot_icon(npc)
     tracking_npc[id] = {
         lost_contact=false,
-        timeout=time_global() + MAP_SPOT_TIMEOUT,
+        timeout=time_global() + (ini_sys:r_value(ammo_type, "timeout") or MAP_SPOT_TIMEOUT) * 1000,
         spots={[1]=spot_icon},
         ammo_type=ammo_type,
-    
     }
     add_map_spot(id, spot_icon, TRACKING_SPOT_TEXT)
 end
@@ -713,6 +713,18 @@ function singularity_explode(npc)
     set_exploded(npc:id(), true)
 end
 
+function on_save(mdata)
+    mdata.tracking_npc = tracking_npc
+    mdata.known_stalkers = known_stalkers
+    mdata.aggro_npcs = aggro_npcs
+end
+
+function on_load(mdata)
+    tracking_npc = mdata.tracking_npc or {}
+    known_stalkers = mdata.known_stalkers or {}
+    aggro_npcs = mdata.aggro_npcs
+end
+
 function on_game_start()
     RegisterScriptCallback("npc_on_hit_callback", start_tracking)
     RegisterScriptCallback("monster_on_hit_callback", start_tracking)
@@ -727,4 +739,6 @@ function on_game_start()
     RegisterScriptCallback("on_enemy_eval", remove_aggro_npc)
     RegisterScriptCallback("npc_on_update", on_npc_update)
     RegisterScriptCallback("monster_on_update", on_npc_update)
+    RegisterScriptCallback("save_state", on_save)
+    RegisterScriptCallback("load_state", on_load)
 end
