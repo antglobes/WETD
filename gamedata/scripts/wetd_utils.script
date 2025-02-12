@@ -376,12 +376,13 @@ function mcm_debug_level()
 end
 
 function filter_debug_msg(debug_level)
+    local mcm_debug_level = mcm_debug_level()
 	local accepted_debug_msgs = {
 		["player"] = {"player"},
 		["dev"]    = {"player", "dev"},
 		["all"]    = {"player", "dev", "all"}
 	}
-	return contains(accepted_debug_msgs[mcm_debug_level()], debug_level)
+	return contains(accepted_debug_msgs[mcm_debug_level], debug_level)
 end
 
 function get_scripts_installed(expected_scripts)

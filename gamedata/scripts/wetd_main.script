@@ -769,6 +769,7 @@ function on_option_change()
     MAX_TRACKING_DIST = get_config("max_tracking_dist")
     MAP_SPOT_TIMEOUT = get_config("map_spot_timeout") * 60
     SIG_DET_RANGE = get_config("sig_det_range")
+    dbg_lvl = get_config("debug_level")
     pr("Finished Loading MCM Options")
 end
 
@@ -789,4 +790,5 @@ function on_game_start()
     RegisterScriptCallback("save_state", on_save)
     RegisterScriptCallback("load_state", on_load)
     RegisterScriptCallback("on_option_change", on_option_change)
+    on_option_change()
 end
