@@ -1,0 +1,34 @@
+defaults = {
+    ["map_spot_timeout"] = 10,
+    ["sig_det_range"] = 15,
+    ["max_tracking_dist"] = 75,
+    ["enable_debug"] = false,
+    ["debug_level"] = "all"
+}
+
+function get_config(key)
+    if ui_mcm then return ui_mcm.get("wetd/"..key) else return defaults[key] end
+end
+
+function debugging_enabled()
+	return get_config("enable_debug")
+end
+
+function on_mcm_load()
+    return {
+        id="wetd", sh=true, gr={
+            {id="title", type="slide", link="ui_wetd_mcm_slider", size={612, 100}, spacing=20, stretch=true},
+            {id="map_spot_timeout", type="track", val=2, min=1, max=60, step=1.0, def=10, desc="ui_mcm_wetd_map_spot_timeout_hint"},
+            {id="sig_det_range", type="track", val=2, min=1, max=100, step=1.0, def=15, desc="ui_mcm_wetd_sig_det_range_hint"},
+            {id="max_tracking_dist", type="track", val=2, min=1, max=500, step=1.0, def=75, desc="ui_mcm_wetd_max_tracking_dist_hint"}, 
+            {id="enable_debug", type="check", val=1, def=false},
+			{id="debug_level", type="list", val=2, def=2, precondition={debugging_enabled},
+				content={
+					{0, "player"},
+					{1, "dev"},
+					{2, "all"}
+				}
+			}
+        }
+    }
+end

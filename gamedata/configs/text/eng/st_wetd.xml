@@ -1,12 +1,13 @@
 
 <string_table>
+    <!-- Tracking Info & Map Spots-->
     <string id="ui_st_pda_tracking">
         <text>Tracking Target</text>
     </string>
     <string id="ui_st_pda_last_known">
         <text>Last Known Location: %s</text>
     </string>
-
+    <!-- Items -->
     <string id="st_ammo_23_wetd_tracker_normal">
         <text>23mm Dart w/ Tracking Device</text>
     </string>
@@ -35,12 +36,48 @@
         ended up exploding. Once their body was discovered and the remains dragged back to Yantar, the scientists where able to form
         a hypothesis that: "The reason he exploded was due to the supercharged dart coming in contact with another dart". </text>
     </string>
+    <!-- MCM -->
+    <string id="ui_mcm_menu_wetd">
+        <text>WETD</text>
+    </string>
+    <string id="ui_mcm_wetd_title">
+        <text>WETD: WTF Extension Tracking Darts</text>
+    </string>
+    <string id="ui_mcm_wetd_map_spot_timeout">
+        <text>Tracking Mapspot Expiry Time</text>
+    </string>
+    <string id="ui_mcm_wetd_map_spot_timeout_hint">
+        <text>Calculated in mintues. After hit by a tracking dart, if no other exit condition is met, when this time is reached, the target will not longer be tracked.</text>
+    </string>
+    <string id="ui_mcm_wetd_sig_det_range">
+        <text>Signularity Effect Detonation Radius</text>
+    </string>
+    <string id="ui_mcm_wetd_sig_det_range_hint">
+        <text>Calculated in meters. When a tracked npc hit by a signularity dart comes in contact with a npc hit with a signularity dart, this is used to calculate the area in which targets will be effected.</text>
+    </string>
+    <string id="ui_mcm_wetd_max_tracking_dist">
+        <text>Maximum Tracking Distance</text>
+    </string>
+    <string id="ui_mcm_wetd_max_tracking_dist_hint">
+        <text>Calculated in meters. Sets the max dist a npc can be hit by a tracking dart and the maximum distance allowed between the player and the targets before tracking stops.</text>
+    </string>
+    <string id="ui_mcm_wetd_enable_debug">
+        <text>Enable Debugging</text>
+    </string>
+    <string id="ui_mcm_wetd_debug_level">
+        <text>Set Debugging Log Level</text>
+    </string>
+
+    
+    <!-- Debugging Messages Level-->
+    <string id="ui_mcm_lst_player">
+        <text>Player</text>
+    </string>
+     <string id="ui_mcm_lst_dev">
+        <text>Developer</text>
+    </string>
+     <string id="ui_mcm_lst_all">
+        <text>All</text>
+    </string>
 </string_table>
-		<text>This ammunition was developed by ChAZ Research Institute according
-         to the special order from Professors Herman and Ozersky, after a successful
-          series of studies in the center of the zone in 2012.  It is a 23mm caliber
-           dart with an ampoule filled with organic liquid crystals synthesized under
-            a strong vacuum.  Because of extreme complexity and high cost of
-             manufacturing, these darts are highly valued by research groups deployed
-              on the territory of ChAZ. Their only disadvantage is the extremely fragile
-               construction, requiring careful handling.</text>
+		

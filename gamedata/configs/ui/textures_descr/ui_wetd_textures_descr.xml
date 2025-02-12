@@ -13,4 +13,8 @@ Purpose: Texture Defintions
         <texture id="ui_icons_wetd_unknown_mutant_passive_spot"    x="100" y="150" width="50" height="50" />
         <texture id="ui_icons_wetd_unknown_mutant_aggressive_spot" x="100" y="200" width="50" height="50" />
     </file>
+
+    <file name="ui\ui_wetd_mcm">
+        <texture id="ui_wetd_mcm_slider" x="0" y="0" width="512" height="50"/>
+    </file>
 </w>

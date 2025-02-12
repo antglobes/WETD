@@ -28,23 +28,27 @@ get_real_community = wetd_utils.get_real_community
 get_ammo_type = wetd_utils.get_ammo_type
 is_unlocked_article = ui_pda_encyclopedia_tab.is_unlocked_article
 mutant_name_to_article = wetd_utils.mutant_name_to_article
+get_config = wetd_mcm.get_config
+filter_debug_msg = wetd_utils.filter_debug_msg
 
 -- Constants
 
-MAX_TRACKING_DIST = 75
 LAST_KNOWN_SPOT_ICON = "red_location"
 TRACKING_SPOT_TEXT = "ui_st_pda_tracking"
 LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
 IGI_DART_GUN = "wpn_igi_ks23_ecolog"
 IGI_DART_AMMO = "ammo_23_igi_eco"
 WETD_DART_GUN = "wpn_igi_ks23_ecolog_wetd"
-MAP_SPOT_TIMEOUT = 300 --- 5 MINTUES
 MAP_SPOT_ICON_PREFIX = "unknown_"
 TRACKER_AMMO_NORMAL  = "ammo_23_wetd_tracker_normal"
 TRACKER_AMMO_VET = "ammo_23_wetd_tracker_vet"
 TRACKER_AMMO_SIG = "ammo_23_wetd_tracker_sig"
 ACCEPTED_AMMO_TYPES = parse_list(ini_sys, WETD_DART_GUN, "ammo_class")
-SIG_DET_RANGE = 15
+
+-- MCM Options
+MAX_TRACKING_DIST = get_config("max_tracking_dist")
+MAP_SPOT_TIMEOUT = get_config("map_spot_timeout") * 60
+SIG_DET_RANGE = get_config("sig_det_range")
 
 
 -- Globals (script)
@@ -55,12 +59,17 @@ local yellow_clr = utils_xml.get_color("yellow")
 local gray_1_clr = utils_xml.get_color("ui_gray_1")
 local pda_white_clr = utils_xml.get_color("pda_white")
 local red_clr = utils_xml.get_color("d_red")
-
+local dbg_lvl = "player"
 
 -- Debug
 
 function pr(str, ...)
+    if not filter_debug_msg(dbg_lvl) then return end
     wetd_utils.dbg_pr("WETD | Main: %s", str, ...)
+end
+
+function set_debug_level(new_dbg_level)
+	dbg_lvl = new_dbg_level
 end
 
 -- Known Stalkers
@@ -78,12 +87,14 @@ end
 
 function remember_stalker(npc)
     if not IsStalker(npc) or is_known_stalker(npc:id()) or npc:id() == AC_ID then return end
+    set_debug_level("all")
     pr("Remembering Stalker: %s", get_npc_name(npc))
     known_stalkers[npc:id()] = {name=get_npc_name(npc), faction=get_real_community(npc)}
 end
 
 function forget_stalker(npc_id)
     if not is_known_stalker(npc_id) then return end
+    set_debug_level("all")
     pr("Forgetting stalker: %s", get_npc_name(get_unknown_object({id=npc_id}, "game")))
     known_stalkers[npc_id] = nil
 end
@@ -92,6 +103,7 @@ end
 
 
 function give_electric_shock(npc, power, timeout)
+    set_debug_level("player")
     pr("Giving electric shock to: %s", get_npc_name(npc))
     if not power then power = 0.1 end
     if not timeout then timeout = 0.4 end
@@ -110,6 +122,7 @@ function give_electric_shock(npc, power, timeout)
 
     local dir = npc:id() == AC_ID and device().cam_dir or npc:direction()
     local y = dir.y <= 0 and 0 or 1.5
+    set_debug_level("all")
     pr("dir y: %s, effect y: %s", dir.y, y)
     local pos = npc:position()
     local shock_id = demonized_particles.add("anomaly2\\electra_damage_02_smoke", pos:add(vector():set(0, y, 0)), timeout * 1000)
@@ -133,8 +146,46 @@ function give_electric_shock(npc, power, timeout)
     end)
 end
 
+function singularity_explode(npc)
+    set_debug_level("all")
+    pr("attempting to blow up npc")
+    local args = {
+        radius = get_sig_det_range() * 1.5,
+        explosion_damage = 2,
+        explosion_damage_type = hit.burn,
+        explosion_sound =  "weapons\\explo\\barrel_explotion\\barrel_exp_"..math.random(1,4), 
+        damage = 2,
+        position = npc:position(),
+        draftsman_id = npc:id(),
+        aoe_hit_sound = "anomaly\\electra_hit",
+        can_panic_npc = true,
+        particles = {
+            "anomaly2\\body_tear_0"..math.random(1,2),
+            "anomaly2\\electra_damage_02_smoke",
+        },
+        explosion_particles = "explosions\\explosion_dynamite",
+        lifetime = 0.1,
+    }
+    demonized_aoe.AOE(args)
+    pr("%s has blown up", get_npc_name(npc))
+    set_exploded(npc:id(), true)
+end
+
 
 -- Helpers
+
+function get_max_dist(ammo_type)
+    local max_dist = ini_sys:r_float_ex(ammo_type, "max_dist")
+    return max_dist < MAX_TRACKING_DIST and max_dist or MAX_TRACKING_DIST
+end
+
+function get_timeout(ammo_type)
+    return (ini_sys:r_float_ex(ammo_type, "timeout") or MAP_SPOT_TIMEOUT) * 1000
+end
+
+function get_sig_det_range()
+    return SIG_DET_RANGE
+end
 
 function get_npc_name(npc)
     return IsStalker(npc) and npc:id() == AC_ID and alife():actor():character_name() or IsStalker(npc) and npc:character_name() or get_mutant_name(npc:section())
@@ -198,7 +249,7 @@ function get_hint(npc, max_tracking_dist, hint_keys)
         if is_mutant(npc) and is_unlocked_article(mutant_name_to_article[name]) or knows_stalker then
             hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / max_tracking_dist, true) .. round_idp(dist, 2) .. "m \\n"
         else
-            hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / max_tracking_dist, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
+            hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / max_tracking_dist, true) .. get_connection_stren(dist / max_tracking_dist) .. "\\n"
         end
     end
 
@@ -220,7 +271,7 @@ end
 function get_tracking_info(npc) -- ui enemy health
     local dist = distance_between(npc, db.actor)
     local ammo_type = get_tracker_ammo(npc:id())
-    local max_dist = ini_sys:r_value(ammo_type, "max_dist")
+    local max_dist = get_max_dist(ammo_type)
     local hint = ""
 
     if ammo_type == TRACKER_AMMO_NORMAL or ammo_type == TRACKER_AMMO_SIG then
@@ -229,7 +280,7 @@ function get_tracking_info(npc) -- ui enemy health
         hint = get_hint(npc, max_dist, {"name", "faction", "health", "distance", "attitude"})
     end
 
-    return  {hint=hint, last_known_hint=get_last_known_hint(npc), dist=dist, max_tracking_dist=max_dist} 
+    return  {hint=hint, last_known_hint=get_last_known_hint(npc), dist=dist, max_dist=max_dist} 
 end
 
 function get_attitude_clr(attitude)
@@ -301,6 +352,7 @@ function has_last_known_spot(id)
 end
 
 function add_map_spot(id, icon, text, hint)
+    set_debug_level("all")
     if not has_map_spot(id, icon) then
         pr("adding map spot: %s", icon)
         level.map_add_object_spot_ser(id, icon, text)
@@ -323,6 +375,7 @@ end
 
 function remove_map_spot(id, icon)
     if not has_map_spot(id, icon) then return end
+    set_debug_level("all")
     pr("removing map spot %s for: %s", icon, id)
     level.map_remove_object_spot(id, icon)
     level.map_remove_object_spot(id, icon)
@@ -348,8 +401,10 @@ end
 
 function remove_all_spots(id, full)
     if is_empty(tracking_npc[id]["spots"]) then return end
+    set_debug_level("dev")
     pr("removing all spots for: %s", id)
     pr("stop tracking?: %s", full)
+    set_debug_level("all")
     for idx, icon in pairs(tracking_npc[id]["spots"]) do      
         pr("idx: %s, icon: %s", idx, icon)  
         if icon ~= LAST_KNOWN_SPOT_ICON then
@@ -366,6 +421,7 @@ function remove_all_spots(id, full)
 end
 
 function update_map_spot(id, icon, text)
+    set_debug_level("all")
     for idx, old_icon in pairs(tracking_npc[id]["spots"]) do
         if icon ~= old_icon and has_map_spot(id, old_icon) then
             pr("updating map spot, removing: %s", old_icon)
@@ -381,7 +437,7 @@ function init_tracking_spot(npc, ammo_type)
     local spot_icon = get_map_spot_icon(npc)
     tracking_npc[id] = {
         lost_contact=false,
-        timeout=time_global() + (ini_sys:r_value(ammo_type, "timeout") or MAP_SPOT_TIMEOUT) * 1000,
+        timeout=time_global() + get_timeout(ammo_type),
         spots={[1]=spot_icon},
         ammo_type=ammo_type,
     }
@@ -397,7 +453,7 @@ function init_last_known_spot(npc, entry, tracking_info)
         game_id = npc:game_vertex_id()
     }
     --pr(utils_data.vector_to_string(spawn_loc.pos), spawn_loc.lvl_id, spawn_loc.game_id)
-    
+    set_debug_level("dev")
     pr("init lk map spot")
     local lks_id = 0
     local lks_icon = LAST_KNOWN_SPOT_ICON
@@ -419,9 +475,8 @@ function init_last_known_spot(npc, entry, tracking_info)
             local smart_name = get_smart_name(get_closest_smart(npc_pos))                        
             tracking_npc[id].last_known_spot = {id=lks_id, icon=lks_icon, pos=lks_pos}
             add_map_spot(lks_id, lks_icon, gts(LAST_KNOWN_SPOT_TEXT, smart_name), tracking_info["last_known_hint"])
+            set_debug_level("all")
             pr("changing spot to last known for: %s", lks_id)
-        else
-            print("temp obj not created")
         end                            
         --return true
    -- end)
@@ -429,7 +484,9 @@ end
 
 function forget_tracking_spot(victim, killer, icon)
     local is_monster = is_mutant(victim)
+    set_debug_level("all")
     if not IsStalker(victim) and not is_monster then pr("npc not stalker or monster") return end
+    set_debug_level("dev")
     pr("Forgetting Tracking spot")
     local spot_icon = icon and icon or get_map_spot_icon(victim)
     remove_tracking_spot(victim:id(), icon)
@@ -437,8 +494,10 @@ function forget_tracking_spot(victim, killer, icon)
 end
 
 function forget_last_known_spot(id, lk_info, length)
+    set_debug_level("dev")
     pr("Forgetting last known spot: %s", length)
     remove_last_known_spot(lk_info["id"], lk_info["spot"])
+    set_debug_level("all")
     if length == "temp" then -- out of range + reuse last known spot
         pr("%s is out of range, reusing lk info", id)
         tracking_npc[id]["lost_contact"] = false    
@@ -452,6 +511,7 @@ end
 
 function stop_tracking(id)
     if not is_tracking(id) then return end
+    set_debug_level("dev")
     pr("stop tracking: %s", id)
     tracking_npc[id] = nil
 end
@@ -471,12 +531,13 @@ function start_tracking(npc, amount, dir, who, bone_index)
     if wpn and string.find(wpn:section(), IGI_DART_GUN) then
 
         local ammo_type = get_ammo_type(wpn)
-        local max_dist = ini_sys:r_value(ammo_type, "max_dist")
+        local max_dist = get_max_dist(ammo_type)
 
-        if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
+        if distance_between(npc, db.actor) > max_dist then return end
 
         if contains(ACCEPTED_AMMO_TYPES, ammo_type) then
-            pr("starting to  track: %s", get_npc_name(npc))
+            set_debug_level("player")
+            pr("starting to track: %s", get_npc_name(npc))
             init_tracking_spot(npc, ammo_type)
         end
     end
@@ -500,6 +561,7 @@ function stop_tracking_on_loot()
         if not npc_id or inventory.mode ~= "loot" then return true end
         if not is_tracking(npc_id) then return end
 
+        set_debug_level("dev")
         pr("stopping tracking for %s on normal loot", get_npc_name(npc))
         create_tracker_ammo(npc, npc_id)
         remove_all_spots(npc_id, true)
@@ -513,6 +575,7 @@ function on_monster_loot(npc)
     local npc_id =  npc:id()
     if not is_tracking(npc_id) then return end
     
+    set_debug_level("dev")
     pr("stopping tracking for %s on mutant loot", get_npc_name(npc))
     local looter_id = false
     level.iterate_nearest(npc:position(), 1.5, function(obj)
@@ -538,6 +601,7 @@ function update_tracking()
             local max_tracking_dist = tracking_info["max_dist"]
 
             if contains(entry, "timeout", true) and tg >= entry["timeout"] then
+                set_debug_level("player")
                 pr("tracking timeout for %s at %s", npc_name, entry["timeout"])
                 remove_all_spots(id, true)
                 return
@@ -553,6 +617,7 @@ function update_tracking()
                     
                     -- last known location
                     if not entry["lost_contact"] then
+                        set_debug_level("player")
                         pr("Lost contact with %s", npc_name)
                         init_last_known_spot(npc, entry, tracking_info)
                         if contains(tracking_npc[id], "last_known_spot", true) then
@@ -576,6 +641,7 @@ function update_tracking()
                 elseif dist_to_target <= max_tracking_dist then
                     -- Remove last known spot once in trackable distance
                     if entry["lost_contact"] and entry["last_known_spot"] then
+                        set_debug_level("player")
                         pr("restablishing contact with %s", npc_name)
                         local lk_info = entry["last_known_spot"]
                         --pr("target back within range, removing last known spot")
@@ -598,16 +664,6 @@ function update_tracking()
 end
 
 -- callbacks
-
-function on_transition()
-    local tg = time_global()
-    for id, entry in pairs(tracking_npc) do
-        if contains(entry, "timeout", true) and tg >= entry["timeout"] then
-            pr("stopped tracking %s at %s", id, tg)
-            remove_all_spots(id)
-        end
-    end
-end
 
 function on_npc_death(victim, killer)
     if is_tracking(victim:id()) then
@@ -649,6 +705,7 @@ end
 function remember_stalker_on_interaction(gui_name)
     if not contains({"UIInventory", "Dialog"}, gui_name) then return end
     local npc = false
+    set_debug_level("all")
     pr("GUI showing: %s", gui_name)
     if gui_name == "Dialog" then
         npc = get_speaker(true)
@@ -677,9 +734,10 @@ function on_npc_update(npc)
     local ammo_type = get_tracker_ammo(npc:id())
     if ammo_type ~= TRACKER_AMMO_SIG then return end
     local cause_explo = false
-    level.iterate_nearest(npc:position(), SIG_DET_RANGE, function(obj)
+    level.iterate_nearest(npc:position(), get_sig_det_range(), function(obj)
         if not IsStalker(obj) and not is_mutant(obj) then return end
         if obj:id() ~= npc:id() and is_tracking(obj:id()) and (obj.alive and obj:alive()) then
+            set_debug_level("dev")
             pr("Found npc (%s) in detonatation range: %sm", get_npc_name(npc), round_idp(dist_to_pos(npc, obj:position()), 2))
             cause_explo = true
             set_exploded(obj:id(), true) 
@@ -693,30 +751,6 @@ function on_npc_update(npc)
     set_exploded(npc:id(), false) 
 end
 
-function singularity_explode(npc)
-    pr("attempting to blow up npc")
-    local args = {
-        radius = SIG_DET_RANGE * 1.5,
-        explosion_damage = 2,
-        explosion_damage_type = hit.burn,
-        explosion_sound =  "weapons\\explo\\barrel_explotion\\barrel_exp_"..math.random(1,4), 
-        damage = 2,
-        position = npc:position(),
-        draftsman_id = npc:id(),
-        aoe_hit_sound = "anomaly\\electra_hit",
-        can_panic_npc = true,
-        particles = {
-            "anomaly2\\body_tear_0"..math.random(1,2),
-            "anomaly2\\electra_damage_02_smoke",
-        },
-        explosion_particles = "explosions\\explosion_dynamite",
-        lifetime = 0.1,
-    }
-    demonized_aoe.AOE(args)
-    pr("%s has blown up", get_npc_name(npc))
-    set_exploded(npc:id(), true)
-end
-
 function on_save(mdata)
     mdata.tracking_npc = tracking_npc
     mdata.known_stalkers = known_stalkers
@@ -726,7 +760,16 @@ end
 function on_load(mdata)
     tracking_npc = mdata.tracking_npc or {}
     known_stalkers = mdata.known_stalkers or {}
-    aggro_npcs = mdata.aggro_npcs
+    aggro_npcs = mdata.aggro_npcs or {}
+end
+
+function on_option_change()
+    set_debug_level("player")
+    pr("Loading MCM Options")
+    MAX_TRACKING_DIST = get_config("max_tracking_dist")
+    MAP_SPOT_TIMEOUT = get_config("map_spot_timeout") * 60
+    SIG_DET_RANGE = get_config("sig_det_range")
+    pr("Finished Loading MCM Options")
 end
 
 function on_game_start()
@@ -745,4 +788,5 @@ function on_game_start()
     RegisterScriptCallback("monster_on_update", on_npc_update)
     RegisterScriptCallback("save_state", on_save)
     RegisterScriptCallback("load_state", on_load)
+    RegisterScriptCallback("on_option_change", on_option_change)
 end
