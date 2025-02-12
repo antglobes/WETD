@@ -31,7 +31,7 @@ mutant_name_to_article = wetd_utils.mutant_name_to_article
 
 -- Constants
 
-MAX_TRACKING_DIST = 2000
+MAX_TRACKING_DIST = 75
 LAST_KNOWN_SPOT_ICON = "red_location"
 TRACKING_SPOT_TEXT = "ui_st_pda_tracking"
 LAST_KNOWN_SPOT_TEXT = "ui_st_pda_last_known"
@@ -161,11 +161,10 @@ function get_connection_stren(stren)
 
 end
 
-function get_hint(npc, hint_keys)
+function get_hint(npc, max_tracking_dist, hint_keys)
     local hint = yellow_clr ..  gts(TRACKING_SPOT_TEXT) .. "\\n"
     local knows_stalker = is_known_stalker(npc:id())
-    local name = get_npc_name(npc)
-    
+    local name = get_npc_name(npc)    
 
     if is_mutant(npc) and not is_unlocked_article(mutant_name_to_article[name]) or not knows_stalker then
         name = "Unknown"
@@ -197,9 +196,9 @@ function get_hint(npc, hint_keys)
         local dist = distance_between(npc, db.actor)
 
         if is_mutant(npc) and is_unlocked_article(mutant_name_to_article[name]) or knows_stalker then
-            hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. round_idp(dist, 2) .. "m \\n"
+            hint = hint .. gray_1_clr .. "Distance: " .. get_condition_colour(dist / max_tracking_dist, true) .. round_idp(dist, 2) .. "m \\n"
         else
-            hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / MAX_TRACKING_DIST, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
+            hint = hint .. gray_1_clr .. "Connection: " .. get_condition_colour(dist / max_tracking_dist, true) .. get_connection_stren(dist / MAX_TRACKING_DIST) .. "\\n"
         end
     end
 
@@ -221,15 +220,16 @@ end
 function get_tracking_info(npc) -- ui enemy health
     local dist = distance_between(npc, db.actor)
     local ammo_type = get_tracker_ammo(npc:id())
+    local max_dist = ini_sys:r_value(ammo_type, "max_dist")
     local hint = ""
 
     if ammo_type == TRACKER_AMMO_NORMAL or ammo_type == TRACKER_AMMO_SIG then
-        hint = get_hint(npc, {"name", "faction", "distance"})
+        hint = get_hint(npc, max_dist,{"name", "faction", "distance"})
     elseif ammo_type == TRACKER_AMMO_VET then
-        hint = get_hint(npc, {"name", "faction", "health", "distance", "attitude"})
+        hint = get_hint(npc, max_dist, {"name", "faction", "health", "distance", "attitude"})
     end
 
-    return  {hint=hint, last_known_hint=get_last_known_hint(npc), dist=dist} 
+    return  {hint=hint, last_known_hint=get_last_known_hint(npc), dist=dist, max_tracking_dist=max_dist} 
 end
 
 function get_attitude_clr(attitude)
@@ -466,12 +466,15 @@ function start_tracking(npc, amount, dir, who, bone_index)
     local is_monster = is_mutant(npc)
     if not IsStalker(npc) and not is_monster then return end -- pr("npc not stalker or monster")
     if contains(tracking_npc, who:id(), true) then return end
-    if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
 
     local wpn = db.actor:active_item()
     if wpn and string.find(wpn:section(), IGI_DART_GUN) then
 
         local ammo_type = get_ammo_type(wpn)
+        local max_dist = ini_sys:r_value(ammo_type, "max_dist")
+
+        if distance_between(npc, db.actor) > MAX_TRACKING_DIST then return end
+
         if contains(ACCEPTED_AMMO_TYPES, ammo_type) then
             pr("starting to  track: %s", get_npc_name(npc))
             init_tracking_spot(npc, ammo_type)
@@ -532,6 +535,7 @@ function update_tracking()
             local tracking_info = get_tracking_info(npc)
             local dist_to_target = tracking_info["dist"]
             local npc_name = get_npc_name(npc)
+            local max_tracking_dist = tracking_info["max_dist"]
 
             if contains(entry, "timeout", true) and tg >= entry["timeout"] then
                 pr("tracking timeout for %s at %s", npc_name, entry["timeout"])
@@ -542,7 +546,7 @@ function update_tracking()
             -- as long as target is on the same level track them
             if not GetEvent("underground")  then -- simulation_objects.is_on_the_actor_level(alife():object(id))
                 -- Stop showing active map spot as out of range but don't stop tracking them
-                if dist_to_target > MAX_TRACKING_DIST then
+                if dist_to_target > max_tracking_dist then
                     --pr("Out of detectable range by %sm, removing mapspot", dist_to_target - MAX_TRACKING_DIST)
                     
                     remove_map_spot(id, spot_icon)
@@ -562,14 +566,14 @@ function update_tracking()
                         --pr("target outside of tracking range but player exceeds distance to last known location")
                         local lk_info = entry["last_known_spot"]
                         local temp_obj_dist = dist_to_pos(db.actor, lk_info["pos"])
-                        local remove_dist = MAX_TRACKING_DIST * 2
+                        local remove_dist = max_tracking_dist * 2
 
                         if temp_obj_dist > remove_dist then
                             forget_last_known_spot(id, lk_info, "temp")
                         end
                     end
                     
-                elseif dist_to_target <= MAX_TRACKING_DIST then
+                elseif dist_to_target <= max_tracking_dist then
                     -- Remove last known spot once in trackable distance
                     if entry["lost_contact"] and entry["last_known_spot"] then
                         pr("restablishing contact with %s", npc_name)
